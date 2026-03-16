@@ -1,16 +1,38 @@
 import { useState, useRef, useEffect } from 'react'
 import { sendMessage } from '../lib/claude'
+import { supabase } from '../lib/supabase'
+
+function buildAccueil(profile, cultures) {
+  const enCours = cultures.filter(c => c.statut !== 'termine')
+  if (enCours.length > 0) {
+    const c = enCours[0]
+    return `Bonjour ${profile.prenom} ! 🌱 Je vois que tu as ${enCours.length === 1 ? 'une culture' : enCours.length + ' cultures'} en cours, notamment ${c.legume}${c.variete ? ' – ' + c.variete : ''}. Comment ça pousse ?`
+  }
+  return `Bonjour ${profile.prenom} ! 🌱 Tu n'as pas encore de culture en cours. C'est le moment d'en ajouter une dans ton jardin ! En attendant, je suis là si tu as des questions.`
+}
 
 export default function Chat({ profile, onClose }) {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: `Bonjour ${profile.prenom} ! 🌱 Ton potager à ${profile.ville} me manquait. Qu'est-ce qu'on fait aujourd'hui ?`
-    }
-  ])
+  const [messages, setMessages] = useState([])
+  const [cultures, setCultures] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
+
+  useEffect(() => {
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('cultures')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      const cults = data || []
+      setCultures(cults)
+      setMessages([{ role: 'assistant', content: buildAccueil(profile, cults) }])
+    }
+    init()
+  }, [profile])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -23,7 +45,7 @@ export default function Chat({ profile, onClose }) {
     const newMessages = [...messages, { role: 'user', content: userMsg }]
     setMessages(newMessages)
     setLoading(true)
-    const reply = await sendMessage(newMessages, profile, [])
+    const reply = await sendMessage(newMessages, profile, cultures)
     setMessages([...newMessages, { role: 'assistant', content: reply }])
     setLoading(false)
   }
@@ -33,13 +55,13 @@ export default function Chat({ profile, onClose }) {
       position: 'fixed', inset: 0, zIndex: 100,
       background: 'rgba(10,20,10,0.98)',
       display: 'flex', flexDirection: 'column',
-      fontFamily: 'Georgia, serif'
+      fontFamily: 'Amaranth, sans-serif'
     }}>
       {/* Header chat */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(109,191,109,0.15)', display: 'flex', alignItems: 'center', gap: 12 }}>
         <img src="/src/img/ElfynNeutre1024_transp.png" alt="Elfyn" style={{ width: 40, height: 40, objectFit: 'contain' }} />
         <div>
-          <div style={{ color: '#e8f5e8', fontSize: 16, fontWeight: 'bold' }}>Elfyn</div>
+          <div style={{ color: '#e8f5e8', fontSize: 18, fontWeight: 'bold' }}>Elfyn</div>
           <div style={{ color: '#6dbf6d', fontSize: 12 }}>Ton compagnon de jardin</div>
         </div>
         <button
@@ -62,7 +84,7 @@ export default function Chat({ profile, onClose }) {
               background: msg.role === 'user' ? 'linear-gradient(135deg, #2d5a2d, #3a6e3a)' : 'rgba(255,255,255,0.06)',
               border: msg.role === 'user' ? '1px solid rgba(109,191,109,0.4)' : '1px solid rgba(255,255,255,0.08)',
               borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-              color: '#e8f5e8', fontSize: 14, lineHeight: 1.6
+              color: '#e8f5e8', fontSize: 16, lineHeight: 1.6, textAlign: 'left'
             }}>
               {msg.content}
             </div>
@@ -94,7 +116,7 @@ export default function Chat({ profile, onClose }) {
             flex: 1, background: 'rgba(255,255,255,0.05)',
             border: '1px solid rgba(109,191,109,0.25)',
             borderRadius: 20, padding: '10px 16px',
-            color: '#e8f5e8', fontSize: 14, fontFamily: 'Georgia, serif', outline: 'none'
+            color: '#e8f5e8', fontSize: 16, fontFamily: 'Amaranth, sans-serif', outline: 'none'
           }}
         />
         <button

@@ -61,7 +61,7 @@ export default function App() {
 )
 
 if (isNewUser) return (
-  <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif' }}>
+  <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Amaranth, sans-serif' }}>
     <div style={{ textAlign: 'center' }}>
       <img
         src="/src/img/ElfynNeutre1024_transp.png"
@@ -71,7 +71,7 @@ if (isNewUser) return (
       <h1 style={{ color: '#e8f5e8', margin: '16px 0 8px', fontSize: 26 }}>
         Bonjour {profile.prenom} !
       </h1>
-      <p style={{ color: '#6dbf6d', fontSize: 15, margin: '0 0 32px' }}>
+      <p style={{ color: '#6dbf6d', fontSize: 17, margin: '0 0 32px' }}>
         Je suis Elfyn, ton compagnon de jardin 🌱<br/>
         Ton potager à {profile.ville} n'attend plus que toi.
       </p>
@@ -81,8 +81,8 @@ if (isNewUser) return (
           padding: '13px 32px',
           background: 'linear-gradient(135deg, #4a7c4a, #6dbf6d)',
           border: 'none', borderRadius: 12,
-          color: '#fff', fontSize: 15,
-          cursor: 'pointer', fontFamily: 'Georgia, serif'
+          color: '#fff', fontSize: 17,
+          cursor: 'pointer', fontFamily: 'Amaranth, sans-serif'
         }}
       >
         Découvrir mon jardin 🌿
@@ -92,7 +92,7 @@ if (isNewUser) return (
 )
 
   return (
-    <div style={{ minHeight: '100vh', background: '#1a2e1a', display: 'flex', flexDirection: 'column', fontFamily: 'Georgia, serif' }}>
+    <div style={{ minHeight: '100vh', background: '#1a2e1a', display: 'flex', flexDirection: 'column', fontFamily: 'Amaranth, sans-serif' }}>
 
       {/* Header */}
       <div style={{ background: 'rgba(10,20,10,0.8)', borderBottom: '1px solid rgba(109,191,109,0.15)', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -100,12 +100,12 @@ if (isNewUser) return (
           <img
             src="/src/img/ElfynNeutre1024_transp.png"
             alt="Elfyn"
-            style={{ width: 36, height: 36, objectFit: 'contain' }}
+            style={{ width: 80, height: 80, objectFit: 'contain' }}
           />
-          <span style={{ color: '#e8f5e8', fontSize: 16, fontWeight: 'bold' }}>Plan Potager</span>
+          <span style={{ color: '#e8f5e8', fontSize: 22, fontWeight: 'bold' }}>Plan Potager</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-  <span style={{ color: '#6dbf6d', fontSize: 13 }}>{profile.prenom} · {profile.ville}</span>
+  <span style={{ color: '#6dbf6d', fontSize: 15 }}>{profile.prenom} · {profile.ville}</span>
   <button
     onClick={() => supabase.auth.signOut()}
     style={{
@@ -113,7 +113,7 @@ if (isNewUser) return (
       border: '1px solid rgba(109,191,109,0.3)',
       borderRadius: 8, padding: '4px 10px',
       color: '#a8d5a2', fontSize: 11,
-      cursor: 'pointer', fontFamily: 'Georgia, serif'
+      cursor: 'pointer', fontFamily: 'Amaranth, sans-serif'
     }}
   >
     ⎋ Quitter
@@ -133,7 +133,7 @@ if (isNewUser) return (
             style={{
               flex: 1, padding: '14px', border: 'none', background: 'transparent',
               color: onglet === o.id ? '#6dbf6d' : '#a8d5a2',
-              fontSize: 14, cursor: 'pointer', fontFamily: 'Georgia, serif',
+              fontSize: 16, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
               borderBottom: onglet === o.id ? '2px solid #6dbf6d' : '2px solid transparent',
               transition: 'all 0.2s'
             }}
@@ -145,7 +145,7 @@ if (isNewUser) return (
 
       {/* Contenu principal */}
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
-        {onglet === 'jardin' && <Jardin profile={profile} />}
+        {onglet === 'jardin' && <Jardin profile={profile} session={session} />}
         {onglet === 'agenda' && <Agenda profile={profile} />}
       </div>
 
@@ -155,14 +155,14 @@ if (isNewUser) return (
         background: 'rgba(10,20,10,0.95)', borderTop: '1px solid rgba(109,191,109,0.2)',
         padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12
       }}>
-        <img src="/src/img/ElfynNeutre1024_transp.png" alt="Elfyn" style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }} />
+        <img src="/src/img/ElfynNeutre1024_transp.png" alt="Elfyn" style={{ width: 50, height: 50, objectFit: 'contain', flexShrink: 0 }} />
         <div
           onClick={() => setChatOuvert(true)}
           style={{
             flex: 1, background: 'rgba(255,255,255,0.05)',
             border: '1px solid rgba(109,191,109,0.25)',
             borderRadius: 20, padding: '10px 16px',
-            color: '#6dbf6d', fontSize: 14, cursor: 'pointer'
+            color: '#6dbf6d', fontSize: 16, cursor: 'pointer'
           }}
         >
           Parler à Elfyn...

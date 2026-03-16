@@ -29,7 +29,7 @@ export default function Auth() {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 100%)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'Georgia, serif'
+      fontFamily: 'Amaranth, sans-serif'
     }}>
       <div style={{
         background: 'rgba(10,20,10,0.7)',
@@ -44,7 +44,7 @@ export default function Auth() {
           style={{ width: 100, height: 100, objectFit: 'contain', display: 'block', margin: '0 auto' }}
           />
           <h1 style={{ color: '#e8f5e8', fontSize: 24, margin: '8px 0 4px' }}>Plan Potager</h1>
-          <p style={{ color: '#6dbf6d', fontSize: 13, margin: 0 }}>
+          <p style={{ color: '#6dbf6d', fontSize: 17, margin: 0 }}>
             {isLogin ? 'Connecte-toi à ton jardin' : 'Crée ton compte'}
           </p>
         </div>
@@ -57,8 +57,8 @@ export default function Auth() {
           style={{
             width: '100%', marginBottom: 12, padding: '10px 14px',
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(109,191,109,0.25)',
-            borderRadius: 10, color: '#e8f5e8', fontSize: 14,
-            fontFamily: 'Georgia, serif', boxSizing: 'border-box', outline: 'none'
+            borderRadius: 10, color: '#e8f5e8', fontSize: 16,
+            fontFamily: 'Amaranth, sans-serif', boxSizing: 'border-box', outline: 'none'
           }}
         />
         <input
@@ -70,13 +70,13 @@ export default function Auth() {
           style={{
             width: '100%', marginBottom: 20, padding: '10px 14px',
             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(109,191,109,0.25)',
-            borderRadius: 10, color: '#e8f5e8', fontSize: 14,
-            fontFamily: 'Georgia, serif', boxSizing: 'border-box', outline: 'none'
+            borderRadius: 10, color: '#e8f5e8', fontSize: 16,
+            fontFamily: 'Amaranth, sans-serif', boxSizing: 'border-box', outline: 'none'
           }}
         />
 
         {message && (
-          <p style={{ color: '#6dbf6d', fontSize: 13, textAlign: 'center', marginBottom: 16 }}>
+          <p style={{ color: '#6dbf6d', fontSize: 17, textAlign: 'center', marginBottom: 16 }}>
             {message}
           </p>
         )}
@@ -88,8 +88,8 @@ export default function Auth() {
             width: '100%', padding: '12px',
             background: 'linear-gradient(135deg, #4a7c4a, #6dbf6d)',
             border: 'none', borderRadius: 10, color: '#fff',
-            fontSize: 15, cursor: loading ? 'default' : 'pointer',
-            fontFamily: 'Georgia, serif', opacity: loading ? 0.7 : 1
+            fontSize: 17, cursor: loading ? 'default' : 'pointer',
+            fontFamily: 'Amaranth, sans-serif', opacity: loading ? 0.7 : 1
           }}
         >
           {loading ? '...' : isLogin ? 'Se connecter' : 'Créer mon compte'}
@@ -98,7 +98,7 @@ export default function Auth() {
         <p
           onClick={() => { setIsLogin(!isLogin); setMessage('') }}
           style={{
-            textAlign: 'center', color: '#a8d5a2', fontSize: 13,
+            textAlign: 'center', color: '#a8d5a2', fontSize: 17,
             marginTop: 20, cursor: 'pointer'
           }}
         >

@@ -60,7 +60,7 @@ export default function Onboarding({ onComplete }) {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 100%)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'Georgia, serif', padding: 24
+      fontFamily: 'Amaranth, sans-serif', padding: 24
     }}>
       <div style={{ width: '100%', maxWidth: 440 }}>
 
@@ -85,20 +85,20 @@ export default function Onboarding({ onComplete }) {
 
           {/* Mascotte */}
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 56 }}>
-              {etapeActuelle === 'prenom' ? '🌱' :
-               etapeActuelle === 'ville' ? '📍' :
-               etapeActuelle === 'surface' ? '💡' : '⭐'}
-            </div>
+            <img
+              src="/src/img/ElfynNeutre1024_transp.png"
+              alt="Elfyn"
+              style={{ width: 80, height: 80, objectFit: 'contain', display: 'block', margin: '0 auto 8px' }}
+            />
           </div>
 
           {/* Étape 1 — Prénom */}
           {etapeActuelle === 'prenom' && (
             <div>
-              <h2 style={{ color: '#e8f5e8', fontSize: 22, margin: '0 0 8px', textAlign: 'center' }}>
+              <h2 style={{ color: '#e8f5e8', fontSize: 20, margin: '0 0 8px', textAlign: 'center', lineHeight: 1.3, padding: '0 8px' }}>
                 Bonjour ! Je suis Elfyn, l'Esprit de ton Jardin 🌿
               </h2>
-              <p style={{ color: '#a8d5a2', fontSize: 14, textAlign: 'center', margin: '0 0 28px' }}>
+              <p style={{ color: '#a8d5a2', fontSize: 16, textAlign: 'center', margin: '0 0 28px', padding: '0 12px' }}>
                 Pour qu'on fasse connaissance, comment tu t'appelles ?
               </p>
               <input
@@ -115,10 +115,10 @@ export default function Onboarding({ onComplete }) {
           {/* Étape 2 — Ville */}
           {etapeActuelle === 'ville' && (
             <div>
-              <h2 style={{ color: '#e8f5e8', fontSize: 22, margin: '0 0 8px', textAlign: 'center' }}>
+              <h2 style={{ color: '#e8f5e8', fontSize: 20, margin: '0 0 8px', textAlign: 'center', lineHeight: 1.3, padding: '0 8px' }}>
                 Enchanté {form.prenom} ! 👋
               </h2>
-              <p style={{ color: '#a8d5a2', fontSize: 14, textAlign: 'center', margin: '0 0 28px' }}>
+              <p style={{ color: '#a8d5a2', fontSize: 16, textAlign: 'center', margin: '0 0 28px', padding: '0 12px' }}>
                 Dans quelle ville est ton potager ? Je dois connaître ton climat pour te donner les bons conseils.
               </p>
               <input
@@ -135,10 +135,10 @@ export default function Onboarding({ onComplete }) {
           {/* Étape 3 — Surface */}
           {etapeActuelle === 'surface' && (
             <div>
-              <h2 style={{ color: '#e8f5e8', fontSize: 22, margin: '0 0 8px', textAlign: 'center' }}>
+              <h2 style={{ color: '#e8f5e8', fontSize: 20, margin: '0 0 8px', textAlign: 'center', lineHeight: 1.3, padding: '0 8px' }}>
                 {form.ville}, beau coin ! 🗺️
               </h2>
-              <p style={{ color: '#a8d5a2', fontSize: 14, textAlign: 'center', margin: '0 0 28px' }}>
+              <p style={{ color: '#a8d5a2', fontSize: 16, textAlign: 'center', margin: '0 0 28px', padding: '0 12px' }}>
                 Quelle est la surface de ton potager ? (optionnel)
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -151,7 +151,7 @@ export default function Onboarding({ onComplete }) {
                   onKeyDown={e => e.key === 'Enter' && handleNext()}
                   style={{ ...inputStyle, flex: 1 }}
                 />
-                <span style={{ color: '#6dbf6d', fontSize: 16, whiteSpace: 'nowrap' }}>m²</span>
+                <span style={{ color: '#6dbf6d', fontSize: 18, whiteSpace: 'nowrap' }}>m²</span>
               </div>
             </div>
           )}
@@ -159,10 +159,10 @@ export default function Onboarding({ onComplete }) {
           {/* Étape 4 — Niveau */}
           {etapeActuelle === 'niveau' && (
             <div>
-              <h2 style={{ color: '#e8f5e8', fontSize: 22, margin: '0 0 8px', textAlign: 'center' }}>
+              <h2 style={{ color: '#e8f5e8', fontSize: 20, margin: '0 0 8px', textAlign: 'center', lineHeight: 1.3, padding: '0 8px' }}>
                 Dernière question !
               </h2>
-              <p style={{ color: '#a8d5a2', fontSize: 14, textAlign: 'center', margin: '0 0 24px' }}>
+              <p style={{ color: '#a8d5a2', fontSize: 16, textAlign: 'center', margin: '0 0 24px', padding: '0 12px' }}>
                 Comment tu te situes en jardinage ?
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -181,7 +181,7 @@ export default function Onboarding({ onComplete }) {
                       transition: 'all 0.2s'
                     }}
                   >
-                    <div style={{ color: '#e8f5e8', fontSize: 15 }}>{n.label}</div>
+                    <div style={{ color: '#e8f5e8', fontSize: 17 }}>{n.label}</div>
                     <div style={{ color: '#6dbf6d', fontSize: 12, marginTop: 2, fontFamily: 'sans-serif' }}>{n.desc}</div>
                   </div>
                 ))}
@@ -200,8 +200,8 @@ export default function Onboarding({ onComplete }) {
                 : 'rgba(109,191,109,0.2)',
               border: 'none', borderRadius: 12,
               color: canNext() ? '#fff' : '#6dbf6d',
-              fontSize: 15, cursor: canNext() && !loading ? 'pointer' : 'default',
-              fontFamily: 'Georgia, serif', transition: 'all 0.3s'
+              fontSize: 17, cursor: canNext() && !loading ? 'pointer' : 'default',
+              fontFamily: 'Amaranth, sans-serif', transition: 'all 0.3s'
             }}
           >
             {loading ? '...' :
@@ -218,7 +218,7 @@ const inputStyle = {
   width: '100%', padding: '12px 16px',
   background: 'rgba(255,255,255,0.05)',
   border: '1px solid rgba(109,191,109,0.25)',
-  borderRadius: 12, color: '#e8f5e8', fontSize: 15,
-  fontFamily: 'Georgia, serif', outline: 'none',
+  borderRadius: 12, color: '#e8f5e8', fontSize: 17,
+  fontFamily: 'Amaranth, sans-serif', outline: 'none',
   boxSizing: 'border-box'
 }
