@@ -1,7 +1,7 @@
 import { buildSystemPrompt } from "./systemPrompt";
 
-export async function sendMessage(messages, profile, cultures) {
-  const systemPrompt = buildSystemPrompt(profile, cultures);
+export async function sendMessage(messages, profile, cultures, legumesRef, conseils) {
+  const systemPrompt = buildSystemPrompt(profile, cultures, legumesRef, conseils);
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -20,5 +20,16 @@ export async function sendMessage(messages, profile, cultures) {
   });
 
   const data = await response.json();
+
+  if (data.error) {
+    console.error('[Claude API] Erreur:', data.error);
+    throw new Error(data.error.message || 'Erreur API Claude');
+  }
+
+  if (!data.content?.[0]?.text) {
+    console.error('[Claude API] Réponse inattendue:', data);
+    throw new Error('Réponse API invalide');
+  }
+
   return data.content[0].text;
 }

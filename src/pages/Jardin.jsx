@@ -1,93 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-
-function AutocompleteSelect({ value, onChange, options, placeholder }) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [hovered, setHovered] = useState(null)
-  const ref = useRef(null)
-  const inputRef = useRef(null)
-
-  useEffect(() => {
-    const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  const filtered = options.filter(o =>
-    o.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .includes(search.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
-  )
-
-  const selected = options.find(o => o.value === value)
-
-  const handleFocus = () => {
-    setSearch('')
-    setOpen(true)
-  }
-
-  const handleSelect = (v) => {
-    onChange(v)
-    const sel = options.find(o => o.value === v)
-    setSearch(sel ? sel.label : '')
-    setOpen(false)
-  }
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <div style={{ position: 'relative' }}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={open ? search : (selected ? selected.label : '')}
-          placeholder={placeholder || '-- Choisir --'}
-          onFocus={handleFocus}
-          onChange={e => { setSearch(e.target.value); setOpen(true) }}
-          style={{
-            width: '100%', padding: '10px 30px 10px 12px', background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(109,191,109,0.3)', borderRadius: 10,
-            color: '#e8f5e8', fontSize: 16, fontFamily: 'Amaranth, sans-serif',
-            outline: 'none', boxSizing: 'border-box',
-          }}
-        />
-        <span
-          onClick={() => { setOpen(!open); if (!open) inputRef.current?.focus() }}
-          style={{
-            position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-            fontSize: 10, color: '#6dbf6d', cursor: 'pointer',
-          }}
-        >{open ? '\u25B2' : '\u25BC'}</span>
-      </div>
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 2000,
-          background: '#1a2e1a', border: '1px solid rgba(109,191,109,0.25)',
-          borderRadius: 10, marginTop: 4, maxHeight: 220, overflowY: 'auto',
-        }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: '9px 12px', fontSize: 16, color: '#6dbf6d', fontFamily: 'Amaranth, sans-serif' }}>
-              Aucun résultat
-            </div>
-          ) : filtered.map(o => (
-            <div
-              key={o.value}
-              onMouseEnter={() => setHovered(o.value)}
-              onMouseLeave={() => setHovered(null)}
-              onClick={() => handleSelect(o.value)}
-              style={{
-                padding: '9px 12px', fontSize: 16, fontFamily: 'Amaranth, sans-serif',
-                color: '#e8f5e8', cursor: 'pointer',
-                background: hovered === o.value ? '#2d4a2d' : 'transparent',
-              }}
-            >
-              {o.label}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
+import LegumeSearch from '../components/ui/LegumeSearch'
 
 function CustomSelect({ value, onChange, options, placeholder }) {
   const [open, setOpen] = useState(false)
@@ -144,17 +57,6 @@ function CustomSelect({ value, onChange, options, placeholder }) {
   )
 }
 
-const LEGUMES = [
-  'Ail', 'Aubergine', 'Basilic', 'Betterave', 'Brocoli', 'Butternut',
-  'Carotte', 'Céleri', 'Chou', 'Chou kale', 'Chou-fleur', 'Concombre',
-  'Courge', 'Courgette', 'Échalote', 'Épinard', 'Fenouil', 'Fraise', 'Fève',
-  'Haricot à rames', 'Haricot vert', 'Laitue',
-  'Mâche', 'Maïs', 'Mesclun', 'Navet', 'Oignon',
-  'Panais', 'Persil', 'Petit pois', 'Piment', 'Poireau',
-  'Pois gourmands',
-  'Poivron', 'Potiron', 'Radis', 'Roquette', 'Tomate',
-]
-
 const STATUTS = [
   { value: 'a_semer', label: 'À semer', color: '#c4a95a' },
   { value: 'en_godets', label: 'En godets / plateaux', color: '#5aafc4' },
@@ -163,17 +65,29 @@ const STATUTS = [
   { value: 'termine', label: 'Terminé', color: '#888888' },
 ]
 
-const formVide = { legume: '', variete: '', statut: 'a_semer', date_semis: '', notes: '' }
+const formVide = { legume: '', legume_ref_id: null, variete: '', statut: 'a_semer', date_semis: '', notes: '' }
 
 export default function Jardin({ profile, session }) {
   const [cultures, setCultures] = useState([])
+  const [legumesRef, setLegumesRef] = useState([])
   const [modalOuverte, setModalOuverte] = useState(false)
   const [form, setForm] = useState(formVide)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (session) fetchCultures()
+    if (session) {
+      fetchCultures()
+      fetchLegumes()
+    }
   }, [session])
+
+  const fetchLegumes = async () => {
+    const { data } = await supabase
+      .from('legumes_ref')
+      .select('id, slug, nom')
+      .order('nom')
+    if (data) setLegumesRef(data)
+  }
 
   const fetchCultures = async () => {
     const { data } = await supabase
@@ -206,6 +120,7 @@ export default function Jardin({ profile, session }) {
       .insert({
         user_id: session.user.id,
         legume: form.legume,
+        legume_ref_id: form.legume_ref_id,
         variete: form.variete || null,
         statut: form.statut,
         date_semis: form.date_semis,
@@ -308,12 +223,15 @@ export default function Jardin({ profile, session }) {
 
             {/* Legume */}
             <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Légume *</label>
-              <AutocompleteSelect
-                value={form.legume}
-                onChange={v => handleChange('legume', v)}
+              <label style={labelStyle}> *</label>
+              <LegumeSearch
+                value={form.legume_ref_id}
+                onChange={v => {
+                  const leg = legumesRef.find(l => l.id === v)
+                  setForm(prev => ({ ...prev, legume_ref_id: v, legume: leg ? leg.nom : '' }))
+                }}
                 placeholder="Rechercher un légume..."
-                options={LEGUMES.map(l => ({ value: l, label: l }))}
+                options={legumesRef.map(l => ({ value: l.id, label: l.nom }))}
               />
             </div>
 

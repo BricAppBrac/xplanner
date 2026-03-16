@@ -5,6 +5,7 @@ import Onboarding from './pages/Onboarding'
 import Jardin from './pages/Jardin'
 import Agenda from './pages/Agenda'
 import Chat from './pages/Chat'
+import Decouvrir from './pages/Decouvrir'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -13,6 +14,7 @@ export default function App() {
   const [onglet, setOnglet] = useState('jardin')
   const [chatOuvert, setChatOuvert] = useState(false)
   const [isNewUser, setIsNewUser] = useState(false)
+  const [legumesRef, setLegumesRef] = useState([])
 
   useEffect(() => {
   // Une seule source de vérité : onAuthStateChange
@@ -42,6 +44,8 @@ export default function App() {
       .eq('id', userId)
       .single()
     setProfile(data || null)
+    const { data: legRef } = await supabase.from('legumes_ref').select('*').order('nom')
+    setLegumesRef(legRef || [])
     setLoading(false)  // loading passe à false UNE SEULE FOIS ici
   }
 
@@ -125,6 +129,7 @@ if (isNewUser) return (
       <div style={{ display: 'flex', borderBottom: '1px solid rgba(109,191,109,0.15)', background: 'rgba(10,20,10,0.5)' }}>
         {[
           { id: 'jardin', label: '🌿 Jardin' },
+          { id: 'decouvrir', label: '🔍 Découvrir' },
           { id: 'agenda', label: '📅 Agenda' },
         ].map(o => (
           <button
@@ -146,6 +151,7 @@ if (isNewUser) return (
       {/* Contenu principal */}
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
         {onglet === 'jardin' && <Jardin profile={profile} session={session} />}
+        {onglet === 'decouvrir' && <Decouvrir profile={profile} legumesRef={legumesRef} />}
         {onglet === 'agenda' && <Agenda profile={profile} />}
       </div>
 
@@ -155,7 +161,7 @@ if (isNewUser) return (
         background: 'rgba(10,20,10,0.95)', borderTop: '1px solid rgba(109,191,109,0.2)',
         padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12
       }}>
-        <img src="/src/img/ElfynNeutre1024_transp.png" alt="Elfyn" style={{ width: 50, height: 50, objectFit: 'contain', flexShrink: 0 }} />
+        <img src="/src/img/ElfynIdee1024_transp.png" alt="Elfyn" style={{ width: 50, height: 50, objectFit: 'contain', flexShrink: 0 }} />
         <div
           onClick={() => setChatOuvert(true)}
           style={{
@@ -165,7 +171,7 @@ if (isNewUser) return (
             color: '#6dbf6d', fontSize: 16, cursor: 'pointer'
           }}
         >
-          Parler à Elfyn...
+          Elfyn · Conseils du jour
         </div>
       </div>
 
