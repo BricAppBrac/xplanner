@@ -6,6 +6,7 @@ import Jardin from './pages/Jardin'
 import Agenda from './pages/Agenda'
 import Chat from './pages/Chat'
 import Decouvrir from './pages/Decouvrir'
+import Calendrier from './pages/Calendrier'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -18,24 +19,34 @@ export default function App() {
   const [cultures, setCultures] = useState([])
 
   useEffect(() => {
-  // Une seule source de vérité : onAuthStateChange
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+  let mounted = true
+
+  // Charger la session au montage
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!mounted) return
+    if (session) {
+      setSession(session)
+      checkProfile(session.user.id)
+    } else {
+      setLoading(false)
+    }
+  })
+
+  // Écouter uniquement sign-in / sign-out réels
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (!mounted) return
     if (event === 'SIGNED_OUT') {
       setSession(null)
       setProfile(null)
       setIsNewUser(false)
       setLoading(false)
-      return
-    }
-    if (session) {
+    } else if (event === 'SIGNED_IN') {
       setSession(session)
-      setLoading(true)          // ← garder le spinner tant que le profil n'est pas chargé
-      await checkProfile(session.user.id)
-    } else {
-      setLoading(false)
+      checkProfile(session.user.id)
     }
+    // TOKEN_REFRESHED et autres events : on ignore, pas de spinner
   })
-  return () => subscription.unsubscribe()
+  return () => { mounted = false; subscription.unsubscribe() }
 }, [])
 
   const checkProfile = async (userId) => {
@@ -136,6 +147,7 @@ if (isNewUser) return (
           { id: 'jardin', label: '🌿 Jardin' },
           { id: 'decouvrir', label: '🔍 Découvrir' },
           { id: 'agenda', label: '📅 Agenda' },
+          { id: 'calendrier', label: '📆 Calendrier' },
         ].map(o => (
           <button
             key={o.id}
@@ -158,6 +170,7 @@ if (isNewUser) return (
         {onglet === 'jardin' && <Jardin profile={profile} session={session} />}
         {onglet === 'decouvrir' && <Decouvrir profile={profile} legumesRef={legumesRef} />}
         {onglet === 'agenda' && <Agenda profile={profile} cultures={cultures} legumesRef={legumesRef} />}
+        {onglet === 'calendrier' && <Calendrier profile={profile} legumesRef={legumesRef} />}
       </div>
 
       {/* Barre chat fixe en bas */}
