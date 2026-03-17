@@ -100,7 +100,7 @@ export function getConseilsJour(profile, cultures, legumesRef) {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   for (const culture of cultures || []) {
-    if (culture.statut !== 'en_place') continue;
+    if (culture.statut !== 'plante' && culture.statut !== 'en_place') continue;
     if (!culture.date_semis) continue;
 
     const ref = legumesRef.find(l => l.id === culture.legume_ref_id);
@@ -172,7 +172,7 @@ export function getConseilsJour(profile, cultures, legumesRef) {
     }
 
     // Cas B : récolte imminente (< 30 jours)
-    if (culture.statut === 'en_place' && culture.date_semis && ref.duree_culture_jours) {
+    if ((culture.statut === 'plante' || culture.statut === 'en_place') && culture.date_semis && ref.duree_culture_jours) {
       const dateSemis = new Date(culture.date_semis);
       const dateRecolte = new Date(dateSemis);
       dateRecolte.setDate(dateRecolte.getDate() + ref.duree_culture_jours);

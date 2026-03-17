@@ -4,21 +4,20 @@ import Auth from './pages/Auth'
 import Onboarding from './pages/Onboarding'
 import Jardin from './pages/Jardin'
 import Agenda from './pages/Agenda'
-import Chat from './pages/Chat'
-import Decouvrir from './pages/Decouvrir'
+import Fiches from './pages/Fiches'
 import Calendrier from './pages/Calendrier'
+import CetteSemaine from './pages/CetteSemaine'
 
 export default function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [onglet, setOnglet] = useState('jardin')
-  const [chatOuvert, setChatOuvert] = useState(false)
+  const [elfynOuvert, setElfynOuvert] = useState(false)
   const [isNewUser, setIsNewUser] = useState(false)
   const [legumesRef, setLegumesRef] = useState([])
   const [cultures, setCultures] = useState([])
   const [bounceKey, setBounceKey] = useState(0)
-  const elfynRef = useRef(null)
 
   useEffect(() => {
     const interval = setInterval(() => setBounceKey(k => k + 1), 5000)
@@ -28,7 +27,6 @@ export default function App() {
   useEffect(() => {
   let mounted = true
 
-  // Charger la session au montage
   supabase.auth.getSession().then(({ data: { session } }) => {
     if (!mounted) return
     if (session) {
@@ -39,7 +37,6 @@ export default function App() {
     }
   })
 
-  // Écouter uniquement sign-in / sign-out réels
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
     if (!mounted) return
     if (event === 'SIGNED_OUT') {
@@ -52,7 +49,6 @@ export default function App() {
       setLoading(true)
       checkProfile(session.user.id)
     }
-    // TOKEN_REFRESHED et autres events : on ignore, pas de spinner
   })
   return () => { mounted = false; subscription.unsubscribe() }
 }, [])
@@ -70,10 +66,19 @@ export default function App() {
     ])
     setLegumesRef(legRef || [])
     setCultures(cult || [])
-    setLoading(false)  // loading passe à false UNE SEULE FOIS ici
+    setLoading(false)
   }
 
-  // Tant que loading = true, on affiche juste le spinner — jamais l'onboarding ni le dashboard
+  const reloadCultures = async () => {
+    if (!session) return
+    const { data } = await supabase
+      .from('cultures')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+    setCultures(data || [])
+  }
+
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#1a2e1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>
       🌱
@@ -91,14 +96,8 @@ export default function App() {
 if (isNewUser) return (
   <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Amaranth, sans-serif' }}>
     <div style={{ textAlign: 'center' }}>
-      <img
-        src="/src/img/ElfynNeutre1024_transp.png"
-        alt="Elfyn"
-        style={{ width: 140, height: 140, objectFit: 'contain', display: 'block', margin: '0 auto' }}
-      />
-      <h1 style={{ color: '#e8f5e8', margin: '16px 0 8px', fontSize: 26 }}>
-        Bonjour {profile.prenom} !
-      </h1>
+      <img src="/src/img/ElfynNeutre1024_transp.png" alt="Elfyn" style={{ width: 140, height: 140, objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+      <h1 style={{ color: '#e8f5e8', margin: '16px 0 8px', fontSize: 26 }}>Bonjour {profile.prenom} !</h1>
       <p style={{ color: '#6dbf6d', fontSize: 17, margin: '0 0 32px' }}>
         Je suis Elfyn, ton compagnon de jardin 🌱<br/>
         Ton potager à {profile.ville} n'attend plus que toi.
@@ -125,45 +124,41 @@ if (isNewUser) return (
       {/* Header */}
       <div style={{ background: 'rgba(10,20,10,0.8)', borderBottom: '1px solid rgba(109,191,109,0.15)', padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img
-            src="/src/img/ElfynNeutre1024_transp.png"
-            alt="Elfyn"
-            style={{ width: 80, height: 80, objectFit: 'contain' }}
-          />
+          <img src="/src/img/ElfynNeutre1024_transp.png" alt="Elfyn" style={{ width: 80, height: 80, objectFit: 'contain' }} />
           <span style={{ color: '#e8f5e8', fontSize: 22, fontWeight: 'bold' }}>Plan Potager</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-  <span style={{ color: '#6dbf6d', fontSize: 15 }}>{profile.prenom} · {profile.ville}</span>
-  <button
-    onClick={() => supabase.auth.signOut()}
-    style={{
-      background: 'transparent',
-      border: '1px solid rgba(109,191,109,0.3)',
-      borderRadius: 8, padding: '4px 10px',
-      color: '#a8d5a2', fontSize: 11,
-      cursor: 'pointer', fontFamily: 'Amaranth, sans-serif'
-    }}
-  >
-    ⎋ Quitter
-  </button>
-</div>
+          <span style={{ color: '#6dbf6d', fontSize: 15 }}>{profile.prenom} · {profile.ville}</span>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(109,191,109,0.3)',
+              borderRadius: 8, padding: '4px 10px',
+              color: '#a8d5a2', fontSize: 11,
+              cursor: 'pointer', fontFamily: 'Amaranth, sans-serif'
+            }}
+          >
+            ⎋ Quitter
+          </button>
+        </div>
       </div>
 
       {/* Onglets */}
       <div style={{ display: 'flex', borderBottom: '1px solid rgba(109,191,109,0.15)', background: 'rgba(10,20,10,0.5)' }}>
         {[
-          { id: 'jardin', label: '🌿 Jardin' },
-          { id: 'decouvrir', label: '🔍 Découvrir' },
-          { id: 'agenda', label: '📅 Agenda' },
+          { id: 'jardin', label: '🌿 Mon Jardin' },
+          { id: 'agenda', label: '🗓️ Agenda' },
+          { id: 'fiches', label: '📋 Fiches' },
           { id: 'calendrier', label: '📆 Calendrier' },
         ].map(o => (
           <button
             key={o.id}
             onClick={() => setOnglet(o.id)}
             style={{
-              flex: 1, padding: '14px', border: 'none', background: 'transparent',
+              flex: 1, padding: '12px 4px', border: 'none', background: 'transparent',
               color: onglet === o.id ? '#6dbf6d' : '#a8d5a2',
-              fontSize: 16, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
+              fontSize: 14, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
               borderBottom: onglet === o.id ? '2px solid #6dbf6d' : '2px solid transparent',
               transition: 'all 0.2s'
             }}
@@ -175,9 +170,9 @@ if (isNewUser) return (
 
       {/* Contenu principal */}
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
-        {onglet === 'jardin' && <Jardin profile={profile} session={session} />}
-        {onglet === 'decouvrir' && <Decouvrir profile={profile} legumesRef={legumesRef} />}
-        {onglet === 'agenda' && <Agenda profile={profile} cultures={cultures} legumesRef={legumesRef} />}
+        {onglet === 'jardin' && <Jardin profile={profile} session={session} cultures={cultures} legumesRef={legumesRef} onCultureChanged={reloadCultures} />}
+        {onglet === 'agenda' && <Agenda profile={profile} cultures={cultures} legumesRef={legumesRef} onCultureChanged={reloadCultures} />}
+        {onglet === 'fiches' && <Fiches legumesRef={legumesRef} profile={profile} />}
         {onglet === 'calendrier' && <Calendrier profile={profile} legumesRef={legumesRef} />}
       </div>
 
@@ -188,9 +183,9 @@ if (isNewUser) return (
           50% { transform: translateY(-6px); }
         }
       `}</style>
-      {!chatOuvert && (
+      {!elfynOuvert && (
         <div
-          onClick={() => setChatOuvert(true)}
+          onClick={() => setElfynOuvert(true)}
           style={{
             position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 50,
             display: 'flex', alignItems: 'flex-end', gap: 8,
@@ -199,11 +194,10 @@ if (isNewUser) return (
         >
           <img
             key={bounceKey}
-            ref={elfynRef}
             src="/src/img/ElfynIdee1024_transp.png"
             alt="Elfyn"
             style={{
-              width: 56, height: 56, objectFit: 'contain', flexShrink: 0,
+              width: 48, height: 48, objectFit: 'contain', flexShrink: 0,
               animation: 'elfyn-bounce 0.6s ease-in-out',
               transition: 'transform 0.2s',
             }}
@@ -211,23 +205,41 @@ if (isNewUser) return (
             onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
           />
           <div style={{
-            position: 'relative',
             background: 'rgba(10,20,10,0.95)',
             border: '1px solid rgba(109,191,109,0.4)',
             borderRadius: '18px 18px 18px 4px',
             padding: '10px 16px',
-            color: '#6dbf6d', fontSize: 14,
+            color: '#6dbf6d', fontSize: 13,
             fontFamily: 'Amaranth, sans-serif',
             whiteSpace: 'nowrap',
           }}>
-            Veux-tu mes conseils du jour ?
+            Veux-tu connaître les semis et plantations possibles cette semaine ?
           </div>
         </div>
       )}
 
-      {/* Chat overlay */}
-      {chatOuvert && (
-        <Chat profile={profile} onClose={() => setChatOuvert(false)} />
+      {/* Modale Elfyn — Cette semaine */}
+      {elfynOuvert && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(10,20,10,0.98)',
+          display: 'flex', flexDirection: 'column',
+          fontFamily: 'Amaranth, sans-serif',
+        }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(109,191,109,0.15)', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <img src="/src/img/ElfynIdee1024_transp.png" alt="Elfyn" style={{ width: 56, height: 56, objectFit: 'contain' }} />
+            <div style={{ color: '#e8f5e8', fontSize: 20, fontWeight: 'bold', flex: 1 }}>Cette semaine au jardin</div>
+            <button
+              onClick={() => setElfynOuvert(false)}
+              style={{ background: 'transparent', border: 'none', color: '#a8d5a2', fontSize: 22, cursor: 'pointer' }}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            <CetteSemaine profile={profile} legumesRef={legumesRef} />
+          </div>
+        </div>
       )}
     </div>
   )
