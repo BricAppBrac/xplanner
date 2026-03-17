@@ -65,7 +65,30 @@ const STATUTS = [
   { value: 'termine', label: 'Terminé', color: '#888888' },
 ]
 
-const formVide = { legume: '', legume_ref_id: null, variete: '', statut: 'a_semer', date_semis: '', notes: '', nb_semis: 1, intervalle_semis_semaines: 3 }
+const CONSEILS_ECHELONNEMENT = {
+  'Radis': { intervalle: 1, conseil: 'Croissance très rapide (25 jours). Semer toutes les semaines pour des récoltes vraiment continues.' },
+  'Mesclun': { intervalle: 1, conseil: 'Prêt en 35 jours. Un semis par semaine garantit une salade fraîche en permanence.' },
+  'Roquette': { intervalle: 1, conseil: 'Monte vite en graine. Semer toutes les semaines pour toujours avoir de jeunes pousses.' },
+  'Laitue': { intervalle: 2, conseil: 'Prête en 45 jours. Toutes les 2 semaines évite d\'avoir 10 salades d\'un coup.' },
+  'Épinard': { intervalle: 2, conseil: 'Récolte en 40 jours. Échelonner toutes les 2 semaines pour une récolte continue.' },
+  'Haricot vert': { intervalle: 2, conseil: 'Récolte en 60 jours. 2 semaines entre chaque semis pour étaler la production.' },
+  'Haricot à rames': { intervalle: 2, conseil: 'Production longue mais démarrage groupé. 2 semaines d\'écart conseillé.' },
+  'Carotte': { intervalle: 3, conseil: 'Longue culture (90 jours). Semer toutes les 3 semaines de février à juillet.' },
+  'Betterave': { intervalle: 3, conseil: 'Culture de 80 jours. 3 semaines d\'intervalle pour étaler les récoltes.' },
+  'Navet': { intervalle: 3, conseil: 'Prêt en 60 jours. Semer toutes les 3 semaines de mars à septembre.' },
+  'Petit pois': { intervalle: 3, conseil: 'Récolte groupée en 70 jours. 3 semaines entre chaque rang.' },
+  'Pois gourmands': { intervalle: 3, conseil: 'Même logique que les petits pois. 3 semaines entre chaque semis.' },
+  'Tomate': { intervalle: 4, conseil: 'Culture longue (90 jours). Un seul semis suffit généralement.' },
+  'Poivron': { intervalle: 4, conseil: 'Cycle très long. Un seul semis en janvier-février est la norme.' },
+  'Aubergine': { intervalle: 4, conseil: 'Même logique que le poivron. Un seul semis suffit.' },
+  'Courgette': { intervalle: 4, conseil: 'Très productive sur une longue période. Un seul semis suffit.' },
+  'Basilic': { intervalle: 2, conseil: 'Monte vite en fleur. Semer toutes les 2 semaines pour toujours avoir du basilic frais.' },
+  'Persil': { intervalle: 4, conseil: 'Bisannuel et persistant. Un seul semis par saison suffit.' },
+}
+
+const CONSEIL_DEFAUT = 'En général, 2 à 3 semaines entre chaque semis permet d\'échelonner les récoltes.'
+
+const formVide = { legume: '', legume_ref_id: null, variete: '', statut: 'a_semer', date_semis: '', notes: '', nb_semis: 1, intervalle_semis_semaines: 2 }
 
 export default function Jardin({ profile, session }) {
   const [cultures, setCultures] = useState([])
@@ -113,7 +136,7 @@ export default function Jardin({ profile, session }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.legume || !form.date_semis) return
+    if (!form.legume) return
     setSaving(true)
     const { data, error } = await supabase
       .from('cultures')
@@ -123,7 +146,7 @@ export default function Jardin({ profile, session }) {
         legume_ref_id: form.legume_ref_id,
         variete: form.variete || null,
         statut: form.statut,
-        date_semis: form.date_semis,
+        date_semis: form.date_semis || null,
         notes: form.notes || null,
         nb_semis: form.nb_semis,
         intervalle_semis_semaines: form.nb_semis > 1 ? form.intervalle_semis_semaines : null,
@@ -190,7 +213,7 @@ export default function Jardin({ profile, session }) {
                   </span>
                 </div>
                 <div style={{ color: '#a8d5a2', fontSize: 12 }}>
-                  Semis : {new Date(c.date_semis).toLocaleDateString('fr-FR')}
+                  {(!c.date_semis || c.date_semis === '1970-01-01') ? 'Semis : à planifier' : 'Semis : ' + new Date(c.date_semis).toLocaleDateString('fr-FR')}
                 </div>
                 {c.notes && (
                   <div style={{ color: '#7daa7d', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>
@@ -230,7 +253,14 @@ export default function Jardin({ profile, session }) {
                 value={form.legume_ref_id}
                 onChange={v => {
                   const leg = legumesRef.find(l => l.id === v)
-                  setForm(prev => ({ ...prev, legume_ref_id: v, legume: leg ? leg.nom : '' }))
+                  const nom = leg ? leg.nom : ''
+                  const conseilData = CONSEILS_ECHELONNEMENT[nom]
+                  setForm(prev => ({
+                    ...prev,
+                    legume_ref_id: v,
+                    legume: nom,
+                    intervalle_semis_semaines: conseilData?.intervalle || 2,
+                  }))
                 }}
                 placeholder="Rechercher un légume..."
                 options={legumesRef.map(l => ({ value: l.id, label: l.nom }))}
@@ -261,12 +291,11 @@ export default function Jardin({ profile, session }) {
 
             {/* Date de semis */}
             <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Date de semis *</label>
+              <label style={labelStyle}>Date de semis</label>
               <input
                 type="date"
                 value={form.date_semis}
                 onChange={e => handleChange('date_semis', e.target.value)}
-                required
                 style={inputStyle}
               />
             </div>
@@ -292,11 +321,15 @@ export default function Jardin({ profile, session }) {
                   value={form.intervalle_semis_semaines}
                   onChange={v => handleChange('intervalle_semis_semaines', v)}
                   options={[
+                    { value: 1, label: '1 semaine' },
                     { value: 2, label: '2 semaines' },
                     { value: 3, label: '3 semaines' },
                     { value: 4, label: '4 semaines' },
                   ]}
                 />
+                <div style={{ color: '#a8d5a2', fontSize: 12, fontStyle: 'italic', marginTop: 6, lineHeight: 1.4 }}>
+                  {'💡 ' + (CONSEILS_ECHELONNEMENT[form.legume]?.conseil || CONSEIL_DEFAUT)}
+                </div>
               </div>
             )}
 

@@ -29,6 +29,13 @@ const MOIS_NOMS = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
 ]
 
+function formatDateOrdinal(date) {
+  const jour = date.getDate()
+  const mois = date.toLocaleDateString('fr-FR', { month: 'short' })
+  const ordinal = jour === 1 ? '1er' : jour.toString()
+  return ordinal + ' ' + mois
+}
+
 function BadgeStatut({ statut }) {
   if (statut === 'cette_semaine') {
     return (
@@ -39,17 +46,6 @@ function BadgeStatut({ statut }) {
         animation: 'pulse 1.5s infinite',
       }}>
         Cette semaine
-      </span>
-    )
-  }
-  if (statut === 'en_cours') {
-    return (
-      <span style={{
-        background: 'rgba(109,191,109,0.25)', color: '#6dbf6d',
-        fontSize: 11, fontWeight: 'bold',
-        padding: '2px 8px', borderRadius: 10,
-      }}>
-        En cours
       </span>
     )
   }
@@ -98,48 +94,31 @@ export default function Agenda({ profile, cultures, legumesRef }) {
 
               {/* Événements */}
               {evts.map((evt, i) => {
-                const jour = evt.date.getDate()
+                const dateStr = formatDateOrdinal(evt.date)
 
                 return (
                   <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '10px 14px', marginBottom: 6,
+                    padding: '10px 16px', marginBottom: 6,
                     background: 'rgba(255,255,255,0.04)',
                     border: '1px solid rgba(109,191,109,0.1)',
                     borderRadius: 10,
+                    textAlign: 'left',
                   }}>
-                    {/* Date */}
-                    <div style={{
-                      width: 38, textAlign: 'center', flexShrink: 0,
-                      color: '#a8d5a2',
-                      fontSize: 20, fontWeight: 'bold',
-                    }}>
-                      {jour}
-                    </div>
-
-                    {/* Emoji */}
-                    <div style={{ fontSize: 22, flexShrink: 0 }}>
-                      {getEmoji(evt.legume)}
-                    </div>
-
-                    {/* Détails */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        color: '#e8f5e8',
-                        fontSize: 15, fontWeight: 'bold',
-                      }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: '#a8d5a2', fontSize: 13, flexShrink: 0, width: 52 }}>
+                        {dateStr}
+                      </span>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{getEmoji(evt.legume)}</span>
+                      <span style={{ color: '#e8f5e8', fontSize: 15, fontWeight: 'bold' }}>
                         {evt.legume}{evt.variete ? ` – ${evt.variete}` : ''}
-                      </div>
-                      <div style={{
-                        color: '#a8d5a2',
-                        fontSize: 13, marginTop: 2,
-                      }}>
+                      </span>
+                      <span style={{ color: '#a8d5a2', fontSize: 13 }}>
                         {evt.label}
-                      </div>
+                      </span>
+                      <span style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                        <BadgeStatut statut={evt.statut} />
+                      </span>
                     </div>
-
-                    {/* Badge */}
-                    <BadgeStatut statut={evt.statut} />
                   </div>
                 )
               })}

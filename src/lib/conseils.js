@@ -38,7 +38,14 @@ export function getConseilsJour(profile, cultures, legumesRef) {
     alertes: [],
     suggestions_semis: [],
     successions: [],
+    successions_possibles: [],
+    associations: [],
     recoltes_prochaines: [],
+  };
+
+  const slugToNom = (slug) => {
+    const ref = legumesRef.find(l => l.slug === slug);
+    return ref?.nom || slug.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
   };
 
   if (!legumesRef?.length) return result;
@@ -132,7 +139,7 @@ export function getConseilsJour(profile, cultures, legumesRef) {
     }
   }
 
-  // 5. Successions
+  // 5. Successions (ancien format, conservé pour compatibilité)
   for (const culture of cultures || []) {
     if (culture.statut !== 'termine' && culture.statut !== 'recolte') continue;
 
@@ -143,6 +150,74 @@ export function getConseilsJour(profile, cultures, legumesRef) {
       apres: culture.legume,
       suggestions: ref.successions,
     });
+  }
+
+  // 6. Successions possibles (enrichies)
+  for (const culture of cultures || []) {
+    if (culture.statut === 'termine') continue;
+    const ref = legumesRef.find(l => l.id === culture.legume_ref_id);
+    if (!ref?.successions?.length) continue;
+    const suggestions = ref.successions.map(slugToNom);
+
+    // Cas A : cultures en récolte
+    if (culture.statut === 'recolte') {
+      result.successions_possibles.push({
+        apres: culture.legume,
+        variete: culture.variete,
+        statut: culture.statut,
+        suggestions,
+        imminente: false,
+      });
+      continue;
+    }
+
+    // Cas B : récolte imminente (< 30 jours)
+    if (culture.statut === 'en_place' && culture.date_semis && ref.duree_culture_jours) {
+      const dateSemis = new Date(culture.date_semis);
+      const dateRecolte = new Date(dateSemis);
+      dateRecolte.setDate(dateRecolte.getDate() + ref.duree_culture_jours);
+      const diff = Math.ceil((dateRecolte - now) / (1000 * 60 * 60 * 24));
+      if (diff >= 0 && diff <= 30) {
+        result.successions_possibles.push({
+          apres: culture.legume,
+          variete: culture.variete,
+          statut: culture.statut,
+          suggestions,
+          imminente: true,
+          jours_restants: diff,
+        });
+        continue;
+      }
+    }
+
+    // Cas C : toute autre culture active — info à prévoir
+    result.successions_possibles.push({
+      apres: culture.legume,
+      variete: culture.variete,
+      statut: culture.statut,
+      suggestions,
+      imminente: false,
+      info: true,
+    });
+  }
+
+  // 7. Associations
+  for (const culture of cultures || []) {
+    if (culture.statut === 'termine') continue;
+    const ref = legumesRef.find(l => l.id === culture.legume_ref_id);
+    if (!ref) continue;
+
+    const benefiques = (ref.associations || []).map(slugToNom);
+    const eviter = (ref.rotations_eviter || []).map(slugToNom);
+
+    if (benefiques.length || eviter.length) {
+      result.associations.push({
+        legume: culture.legume,
+        variete: culture.variete,
+        benefiques,
+        eviter,
+      });
+    }
   }
 
   return result;

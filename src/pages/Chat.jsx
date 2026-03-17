@@ -139,6 +139,32 @@ export default function Chat({ profile, onClose }) {
               )}
             </div>
 
+            {/* Associations */}
+            {conseils.associations?.length > 0 && (
+              <div style={sectionStyle}>
+                <div style={sectionTitleStyle}>🤝 Associations dans ton jardin</div>
+                {conseils.associations.map((a, i) => (
+                  <div key={i} style={{ marginBottom: 16 }}>
+                    <div style={legumeTitleStyle}>
+                      {getEmoji(a.legume)} {a.legume}{a.variete ? ' – ' + a.variete : ''}
+                    </div>
+                    {a.benefiques.length > 0 && (
+                      <div style={itemStyle}>
+                        <span style={{ ...puceStyle, color: '#6dbf6d' }}>✅</span>
+                        <span style={{ color: '#c4d4c4' }}>Plante à côté : {a.benefiques.join(', ')}</span>
+                      </div>
+                    )}
+                    {a.eviter.length > 0 && (
+                      <div style={itemStyle}>
+                        <span style={{ ...puceStyle, color: '#e6a835' }}>❌</span>
+                        <span style={{ color: '#c4d4c4' }}>Évite à proximité : {a.eviter.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Suggestions de semis */}
             <div style={sectionStyle}>
               <div style={sectionTitleStyle}>Fenêtres de semis ouvertes</div>
@@ -154,26 +180,6 @@ export default function Chat({ profile, onClose }) {
                 ))
               ) : (
                 <div style={emptyStyle}>Aucun semis à lancer cette semaine</div>
-              )}
-            </div>
-
-            {/* Successions */}
-            <div style={sectionStyle}>
-              <div style={sectionTitleStyle}>Successions possibles</div>
-              {conseils.successions.length > 0 ? (
-                conseils.successions.map((s, i) => (
-                  <div key={i} style={{ marginBottom: 16 }}>
-                    <div style={legumeTitleStyle}>{getEmoji(s.apres)} Après tes {s.apres}</div>
-                    {s.suggestions.map((sug, j) => (
-                      <div key={j} style={itemStyle}>
-                        <span style={puceStyle}>›</span>
-                        <span style={{ color: '#a8d5a2' }}>{slugToLabel(sug)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))
-              ) : (
-                <div style={emptyStyle}>Aucune place libérée pour l'instant</div>
               )}
             </div>
 
@@ -198,6 +204,31 @@ export default function Chat({ profile, onClose }) {
                 <div style={emptyStyle}>Aucune récolte proche</div>
               )}
             </div>
+
+            {/* Successions possibles */}
+            {conseils.successions_possibles?.length > 0 && (
+              <div style={sectionStyle}>
+                <div style={sectionTitleStyle}>🔄 Successions possibles</div>
+                {conseils.successions_possibles.map((s, i) => (
+                  <div key={i} style={{ marginBottom: 16 }}>
+                    <div style={legumeTitleStyle}>
+                      {getEmoji(s.apres)} {s.apres}{s.variete ? ' – ' + s.variete : ''}
+                    </div>
+                    <div style={itemStyle}>
+                      <span style={puceStyle}>›</span>
+                      <span style={{ color: '#c4d4c4' }}>
+                        {s.imminente
+                          ? `Prêts dans ${s.jours_restants} jour${s.jours_restants > 1 ? 's' : ''} : pense déjà à prévoir ${s.suggestions.join(', ')}`
+                          : s.info
+                            ? `Après la récolte, tu pourras enchaîner avec ${s.suggestions.join(', ')}`
+                            : `Tu peux planter ${s.suggestions.join(', ')}`
+                        }
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Alertes */}
             {conseils.alertes.length > 0 && (

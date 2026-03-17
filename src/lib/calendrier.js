@@ -69,40 +69,51 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
     const nbSemis = culture.nb_semis || 1;
     const intervalle = culture.intervalle_semis_semaines || 3;
 
-    // Semis (avec semis successifs si nb_semis > 1)
+    // Semis, plantation, récolte — échelonnés si nb_semis > 1
     ajouterSemis(evenements, ref, zone, nom, variete, year, now, nbSemis, intervalle);
 
-    // Plantation
     const plantDebut = ref[`plantation_${zone}_debut`];
     const plantFin = ref[`plantation_${zone}_fin`];
-    if (plantDebut) {
-      const plantDate = mmddToDate(plantDebut, year);
-      const plantFinDate = plantFin ? mmddToDate(plantFin, year) : null;
-      if (plantDate) {
-        evenements.push({
-          date: plantDate,
-          legume: nom, variete, slug: ref.slug,
-          type: 'plantation',
-          label: '🪴 Plantation',
-          statut: statutDate(plantDate, now, plantDate, plantFinDate),
-        });
-      }
-    }
-
-    // Récolte
     const recDebut = ref[`recolte_${zone}_debut`];
     const recFin = ref[`recolte_${zone}_fin`];
-    if (recDebut) {
-      const recDate = mmddToDate(recDebut, year);
-      const recFinDate = recFin ? mmddToDate(recFin, year) : null;
-      if (recDate) {
-        evenements.push({
-          date: recDate,
-          legume: nom, variete, slug: ref.slug,
-          type: 'recolte',
-          label: '🧺 Début de récolte',
-          statut: statutDate(recDate, now, recDate, recFinDate),
-        });
+    const decalageJours = intervalle * 7;
+
+    for (let i = 0; i < nbSemis; i++) {
+      const decalage = i * decalageJours;
+      const suffix = nbSemis > 1 ? ` ${i + 1}/${nbSemis}` : '';
+
+      // Plantation
+      if (plantDebut) {
+        const plantDate = mmddToDate(plantDebut, year);
+        const plantFinDate = plantFin ? mmddToDate(plantFin, year) : null;
+        if (plantDate) {
+          const date = new Date(plantDate);
+          date.setDate(date.getDate() + decalage);
+          evenements.push({
+            date,
+            legume: nom, variete, slug: ref.slug,
+            type: 'plantation',
+            label: `🪴 Plantation${suffix}`,
+            statut: statutDate(date, now, plantDate, plantFinDate),
+          });
+        }
+      }
+
+      // Récolte
+      if (recDebut) {
+        const recDate = mmddToDate(recDebut, year);
+        const recFinDate = recFin ? mmddToDate(recFin, year) : null;
+        if (recDate) {
+          const date = new Date(recDate);
+          date.setDate(date.getDate() + decalage);
+          evenements.push({
+            date,
+            legume: nom, variete, slug: ref.slug,
+            type: 'recolte',
+            label: `🧺 Début de récolte${suffix}`,
+            statut: statutDate(date, now, recDate, recFinDate),
+          });
+        }
       }
     }
   }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
 import Auth from './pages/Auth'
 import Onboarding from './pages/Onboarding'
@@ -17,6 +17,13 @@ export default function App() {
   const [isNewUser, setIsNewUser] = useState(false)
   const [legumesRef, setLegumesRef] = useState([])
   const [cultures, setCultures] = useState([])
+  const [bounceKey, setBounceKey] = useState(0)
+  const elfynRef = useRef(null)
+
+  useEffect(() => {
+    const interval = setInterval(() => setBounceKey(k => k + 1), 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
   let mounted = true
@@ -42,6 +49,7 @@ export default function App() {
       setLoading(false)
     } else if (event === 'SIGNED_IN') {
       setSession(session)
+      setLoading(true)
       checkProfile(session.user.id)
     }
     // TOKEN_REFRESHED et autres events : on ignore, pas de spinner
@@ -166,32 +174,56 @@ if (isNewUser) return (
       </div>
 
       {/* Contenu principal */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
         {onglet === 'jardin' && <Jardin profile={profile} session={session} />}
         {onglet === 'decouvrir' && <Decouvrir profile={profile} legumesRef={legumesRef} />}
         {onglet === 'agenda' && <Agenda profile={profile} cultures={cultures} legumesRef={legumesRef} />}
         {onglet === 'calendrier' && <Calendrier profile={profile} legumesRef={legumesRef} />}
       </div>
 
-      {/* Barre chat fixe en bas */}
-      <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: 'rgba(10,20,10,0.95)', borderTop: '1px solid rgba(109,191,109,0.2)',
-        padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12
-      }}>
-        <img src="/src/img/ElfynIdee1024_transp.png" alt="Elfyn" style={{ width: 50, height: 50, objectFit: 'contain', flexShrink: 0 }} />
+      {/* Elfyn bulle */}
+      <style>{`
+        @keyframes elfyn-bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+        }
+      `}</style>
+      {!chatOuvert && (
         <div
           onClick={() => setChatOuvert(true)}
           style={{
-            flex: 1, background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(109,191,109,0.25)',
-            borderRadius: 20, padding: '10px 16px',
-            color: '#6dbf6d', fontSize: 16, cursor: 'pointer'
+            position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 50,
+            display: 'flex', alignItems: 'flex-end', gap: 8,
+            cursor: 'pointer',
           }}
         >
-          Elfyn · Conseils du jour
+          <img
+            key={bounceKey}
+            ref={elfynRef}
+            src="/src/img/ElfynIdee1024_transp.png"
+            alt="Elfyn"
+            style={{
+              width: 56, height: 56, objectFit: 'contain', flexShrink: 0,
+              animation: 'elfyn-bounce 0.6s ease-in-out',
+              transition: 'transform 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          />
+          <div style={{
+            position: 'relative',
+            background: 'rgba(10,20,10,0.95)',
+            border: '1px solid rgba(109,191,109,0.4)',
+            borderRadius: '18px 18px 18px 4px',
+            padding: '10px 16px',
+            color: '#6dbf6d', fontSize: 14,
+            fontFamily: 'Amaranth, sans-serif',
+            whiteSpace: 'nowrap',
+          }}>
+            Veux-tu mes conseils du jour ?
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Chat overlay */}
       {chatOuvert && (
