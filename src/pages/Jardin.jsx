@@ -65,7 +65,7 @@ const STATUTS = [
   { value: 'termine', label: 'Terminé', color: '#888888' },
 ]
 
-const formVide = { legume: '', legume_ref_id: null, variete: '', statut: 'a_semer', date_semis: '', notes: '' }
+const formVide = { legume: '', legume_ref_id: null, variete: '', statut: 'a_semer', date_semis: '', notes: '', nb_semis: 1, intervalle_semis_semaines: 3 }
 
 export default function Jardin({ profile, session }) {
   const [cultures, setCultures] = useState([])
@@ -125,6 +125,8 @@ export default function Jardin({ profile, session }) {
         statut: form.statut,
         date_semis: form.date_semis,
         notes: form.notes || null,
+        nb_semis: form.nb_semis,
+        intervalle_semis_semaines: form.nb_semis > 1 ? form.intervalle_semis_semaines : null,
       })
       .select()
       .single()
@@ -268,6 +270,35 @@ export default function Jardin({ profile, session }) {
                 style={inputStyle}
               />
             </div>
+
+            {/* Nombre de semis */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={labelStyle}>Combien de semis successifs ?</label>
+              <input
+                type="number"
+                min={1}
+                max={6}
+                value={form.nb_semis}
+                onChange={e => handleChange('nb_semis', Math.max(1, Math.min(6, parseInt(e.target.value) || 1)))}
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Intervalle entre semis */}
+            {form.nb_semis > 1 && (
+              <div style={{ marginBottom: 14 }}>
+                <label style={labelStyle}>Intervalle entre les semis</label>
+                <CustomSelect
+                  value={form.intervalle_semis_semaines}
+                  onChange={v => handleChange('intervalle_semis_semaines', v)}
+                  options={[
+                    { value: 2, label: '2 semaines' },
+                    { value: 3, label: '3 semaines' },
+                    { value: 4, label: '4 semaines' },
+                  ]}
+                />
+              </div>
+            )}
 
             {/* Notes */}
             <div style={{ marginBottom: 20 }}>

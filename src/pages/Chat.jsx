@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { getConseilsJour } from '../lib/conseils'
+import { slugToLabel } from '../lib/utils'
 
 const EMOJI_MAP = {
   tomate: '🍅', courgette: '🥒', concombre: '🥒',
@@ -166,7 +167,7 @@ export default function Chat({ profile, onClose }) {
                     {s.suggestions.map((sug, j) => (
                       <div key={j} style={itemStyle}>
                         <span style={puceStyle}>›</span>
-                        <span style={{ color: '#a8d5a2' }}>{sug.replace(/_/g, ' ')}</span>
+                        <span style={{ color: '#a8d5a2' }}>{slugToLabel(sug)}</span>
                       </div>
                     ))}
                   </div>

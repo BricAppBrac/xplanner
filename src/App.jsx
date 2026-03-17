@@ -15,6 +15,7 @@ export default function App() {
   const [chatOuvert, setChatOuvert] = useState(false)
   const [isNewUser, setIsNewUser] = useState(false)
   const [legumesRef, setLegumesRef] = useState([])
+  const [cultures, setCultures] = useState([])
 
   useEffect(() => {
   // Une seule source de vérité : onAuthStateChange
@@ -44,8 +45,12 @@ export default function App() {
       .eq('id', userId)
       .single()
     setProfile(data || null)
-    const { data: legRef } = await supabase.from('legumes_ref').select('*').order('nom')
+    const [{ data: legRef }, { data: cult }] = await Promise.all([
+      supabase.from('legumes_ref').select('*').order('nom'),
+      supabase.from('cultures').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+    ])
     setLegumesRef(legRef || [])
+    setCultures(cult || [])
     setLoading(false)  // loading passe à false UNE SEULE FOIS ici
   }
 
@@ -152,7 +157,7 @@ if (isNewUser) return (
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
         {onglet === 'jardin' && <Jardin profile={profile} session={session} />}
         {onglet === 'decouvrir' && <Decouvrir profile={profile} legumesRef={legumesRef} />}
-        {onglet === 'agenda' && <Agenda profile={profile} />}
+        {onglet === 'agenda' && <Agenda profile={profile} cultures={cultures} legumesRef={legumesRef} />}
       </div>
 
       {/* Barre chat fixe en bas */}

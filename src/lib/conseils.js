@@ -16,7 +16,11 @@ export function getZone(profile) {
 
 function isInFenetre(fenetre, mmdd) {
   if (!fenetre?.debut || !fenetre?.fin) return false;
-  return mmdd >= fenetre.debut && mmdd <= fenetre.fin;
+  if (fenetre.debut <= fenetre.fin) {
+    return mmdd >= fenetre.debut && mmdd <= fenetre.fin;
+  }
+  // Chevauchement d'année (ex: 11-01 → 02-28)
+  return mmdd >= fenetre.debut || mmdd <= fenetre.fin;
 }
 
 function getMMDD() {
@@ -66,19 +70,18 @@ export function getConseilsJour(profile, cultures, legumesRef) {
 
   // 2. Suggestions de semis
   for (const leg of legumesRef) {
-    const calendrier = leg.calendrier?.[zone];
-    if (!calendrier) continue;
-
-    const enSemisAbri = isInFenetre(calendrier.semis_abri, mmdd);
-    const enSemisTerre = isInFenetre(calendrier.semis_pleine_terre, mmdd);
-    const enSemisGeneral = isInFenetre(calendrier.semis, mmdd);
-
-    if (!enSemisAbri && !enSemisTerre && !enSemisGeneral) continue;
-
     const slug = leg.slug || leg.nom?.toLowerCase();
     if (slugsActifs.has(slug)) continue;
 
-    const mode = enSemisAbri ? 'sous abri' : enSemisTerre ? 'pleine terre' : 'semis';
+    const abri = { debut: leg[`semis_abri_${zone}_debut`], fin: leg[`semis_abri_${zone}_fin`] };
+    const terre = { debut: leg[`semis_terre_${zone}_debut`], fin: leg[`semis_terre_${zone}_fin`] };
+
+    const enSemisAbri = isInFenetre(abri, mmdd);
+    const enSemisTerre = isInFenetre(terre, mmdd);
+
+    if (!enSemisAbri && !enSemisTerre) continue;
+
+    const mode = enSemisAbri ? 'sous abri' : 'pleine terre';
     result.suggestions_semis.push({
       legume: leg.nom,
       slug: leg.slug,
@@ -110,7 +113,26 @@ export function getConseilsJour(profile, cultures, legumesRef) {
     }
   }
 
-  // 4. Successions
+  // 4. Alertes saisonnières (pour les légumes cultivés activement)
+  const mois = now.getMonth() + 1;
+  const alertesSaison = [];
+  if (mois >= 11 || mois <= 3) alertesSaison.push('gel');
+  if (mois >= 6 && mois <= 8) alertesSaison.push('canicule', 'secheresse');
+  if (mois >= 4 && mois <= 6) alertesSaison.push('pluie_prolongee');
+  if (mois >= 9 && mois <= 10) alertesSaison.push('pluie_prolongee');
+
+  for (const culture of culturesActives) {
+    const ref = legumesRef.find(l => l.id === culture.legume_ref_id);
+    const alertes = ref?.alertes_saisonnieres;
+    if (!alertes || typeof alertes !== 'object') continue;
+    for (const type of alertesSaison) {
+      if (alertes[type]) {
+        result.alertes.push(`${culture.legume} : ${alertes[type]}`);
+      }
+    }
+  }
+
+  // 5. Successions
   for (const culture of cultures || []) {
     if (culture.statut !== 'termine' && culture.statut !== 'recolte') continue;
 

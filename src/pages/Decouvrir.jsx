@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { getZone } from '../lib/conseils'
+import { slugToLabel } from '../lib/utils'
 import LegumeSearch from '../components/ui/LegumeSearch'
 
 const EMOJI_MAP = {
@@ -27,7 +28,8 @@ function getEmoji(legume) {
 
 function isInFenetre(debut, fin, mmdd) {
   if (!debut || !fin) return false
-  return mmdd >= debut && mmdd <= fin
+  if (debut <= fin) return mmdd >= debut && mmdd <= fin
+  return mmdd >= debut || mmdd <= fin
 }
 
 function getMMDD() {
@@ -50,7 +52,11 @@ const LABELS_STADES = {
 function FicheLegume({ legume, zone }) {
   if (!legume) return null
 
-  const cal = legume.calendrier?.[zone]
+  const semisAbri = { debut: legume[`semis_abri_${zone}_debut`], fin: legume[`semis_abri_${zone}_fin`] }
+  const semisTerre = { debut: legume[`semis_terre_${zone}_debut`], fin: legume[`semis_terre_${zone}_fin`] }
+  const plantation = { debut: legume[`plantation_${zone}_debut`], fin: legume[`plantation_${zone}_fin`] }
+  const recolte = { debut: legume[`recolte_${zone}_debut`], fin: legume[`recolte_${zone}_fin`] }
+  const hasCal = semisAbri.debut || semisTerre.debut || plantation.debut || recolte.debut
   const stades = legume.taches_par_stade || {}
 
   const sectionStyle = {
@@ -70,39 +76,33 @@ function FicheLegume({ legume, zone }) {
       </div>
 
       {/* Calendrier */}
-      {cal && (
+      {hasCal && (
         <div style={sectionStyle}>
           <div style={{ fontSize: 16, fontWeight: 'bold', color: '#6dbf6d', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid rgba(109,191,109,0.2)' }}>
             Calendrier — zone {zone}
           </div>
-          {cal.semis_abri && (
+          {semisAbri.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Semis sous abri</div>
-              <div style={valueStyle}>{cal.semis_abri.debut} → {cal.semis_abri.fin}</div>
+              <div style={valueStyle}>{semisAbri.debut} → {semisAbri.fin}</div>
             </div>
           )}
-          {cal.semis_pleine_terre && (
+          {semisTerre.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Semis pleine terre</div>
-              <div style={valueStyle}>{cal.semis_pleine_terre.debut} → {cal.semis_pleine_terre.fin}</div>
+              <div style={valueStyle}>{semisTerre.debut} → {semisTerre.fin}</div>
             </div>
           )}
-          {cal.semis && !cal.semis_abri && !cal.semis_pleine_terre && (
-            <div style={{ marginBottom: 6 }}>
-              <div style={labelStyle}>Semis</div>
-              <div style={valueStyle}>{cal.semis.debut || cal.semis} → {cal.semis.fin || ''}</div>
-            </div>
-          )}
-          {cal.plantation && (
+          {plantation.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Plantation</div>
-              <div style={valueStyle}>{cal.plantation.debut} → {cal.plantation.fin}</div>
+              <div style={valueStyle}>{plantation.debut} → {plantation.fin}</div>
             </div>
           )}
-          {cal.recolte && (
+          {recolte.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Récolte</div>
-              <div style={valueStyle}>{cal.recolte.debut || cal.recolte} → {cal.recolte.fin || ''}</div>
+              <div style={valueStyle}>{recolte.debut} → {recolte.fin}</div>
             </div>
           )}
           {legume.duree_culture_jours && (
@@ -161,7 +161,7 @@ function FicheLegume({ legume, zone }) {
           <div style={{ fontSize: 16, fontWeight: 'bold', color: '#6dbf6d', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid rgba(109,191,109,0.2)' }}>
             Successions possibles
           </div>
-          <div style={valueStyle}>{legume.successions.map(s => s.replace(/_/g, ' ')).join(', ')}</div>
+          <div style={valueStyle}>{legume.successions.map(s => slugToLabel(s)).join(', ')}</div>
         </div>
       )}
     </div>
@@ -176,16 +176,10 @@ export default function Decouvrir({ profile, legumesRef }) {
   const semis = useMemo(() => {
     if (!legumesRef?.length) return []
     return legumesRef.filter(leg => {
-      const cal = leg.calendrier?.[zone]
-      if (!cal) return false
-      return isInFenetre(cal.semis_abri?.debut, cal.semis_abri?.fin, mmdd)
-        || isInFenetre(cal.semis_pleine_terre?.debut, cal.semis_pleine_terre?.fin, mmdd)
-        || isInFenetre(cal.semis?.debut, cal.semis?.fin, mmdd)
+      return isInFenetre(leg[`semis_abri_${zone}_debut`], leg[`semis_abri_${zone}_fin`], mmdd)
+        || isInFenetre(leg[`semis_terre_${zone}_debut`], leg[`semis_terre_${zone}_fin`], mmdd)
     }).map(leg => {
-      const cal = leg.calendrier[zone]
-      const mode = isInFenetre(cal.semis_abri?.debut, cal.semis_abri?.fin, mmdd) ? 'Sous abri'
-        : isInFenetre(cal.semis_pleine_terre?.debut, cal.semis_pleine_terre?.fin, mmdd) ? 'En pleine terre'
-        : 'Semis'
+      const mode = isInFenetre(leg[`semis_abri_${zone}_debut`], leg[`semis_abri_${zone}_fin`], mmdd) ? 'Sous abri' : 'En pleine terre'
       return { ...leg, mode }
     })
   }, [legumesRef, zone, mmdd])
@@ -193,9 +187,7 @@ export default function Decouvrir({ profile, legumesRef }) {
   const plantations = useMemo(() => {
     if (!legumesRef?.length) return []
     return legumesRef.filter(leg => {
-      const cal = leg.calendrier?.[zone]
-      if (!cal) return false
-      return isInFenetre(cal.plantation?.debut, cal.plantation?.fin, mmdd)
+      return isInFenetre(leg[`plantation_${zone}_debut`], leg[`plantation_${zone}_fin`], mmdd)
     })
   }, [legumesRef, zone, mmdd])
 

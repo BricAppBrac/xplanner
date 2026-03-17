@@ -12,9 +12,17 @@ function buildCultureDetail(culture, legumesRef, zone) {
   let texte = `- ${culture.legume} (${culture.variete || "variété non renseignée"}) : ${culture.statut}, semé le ${culture.date_semis || "non renseigné"}`;
 
   if (ref) {
-    const calendrier = ref.calendrier?.[zone];
-    if (calendrier) {
-      texte += `\n  Calendrier (zone ${zone}) : semis ${calendrier.semis || '?'}, plantation ${calendrier.plantation || '?'}, récolte ${calendrier.recolte || '?'}`;
+    const semisAbri = ref[`semis_abri_${zone}_debut`];
+    const semisTerre = ref[`semis_terre_${zone}_debut`];
+    const plantation = ref[`plantation_${zone}_debut`];
+    const recolte = ref[`recolte_${zone}_debut`];
+    const parts = [];
+    if (semisAbri) parts.push(`semis abri dès ${semisAbri}`);
+    if (semisTerre) parts.push(`semis terre dès ${semisTerre}`);
+    if (plantation) parts.push(`plantation dès ${plantation}`);
+    if (recolte) parts.push(`récolte dès ${recolte}`);
+    if (parts.length) {
+      texte += `\n  Calendrier (zone ${zone}) : ${parts.join(', ')}`;
     }
     if (ref.duree_culture_jours) texte += `\n  Durée de culture : ${ref.duree_culture_jours} jours`;
     if (ref.associations_benefiques?.length) texte += `\n  Associations bénéfiques : ${ref.associations_benefiques.join(', ')}`;
