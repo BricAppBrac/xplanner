@@ -54,11 +54,30 @@
 
 * {
   font-family: "Amaranth", sans-serif;
+  cursor: default;
 }
 
 body {
   margin: 0;
   font-size: 16px;
+}
+
+a, button, [role="button"], input[type="submit"],
+input[type="button"], input[type="reset"],
+select, summary, [onclick] {
+  cursor: pointer;
+}
+
+input, textarea {
+  cursor: text;
+}
+
+input[type="range"] {
+  cursor: grab;
+}
+
+input[type="range"]:active {
+  cursor: grabbing;
 }
 
 #root {

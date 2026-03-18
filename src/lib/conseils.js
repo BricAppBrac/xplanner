@@ -128,13 +128,17 @@ export function getConseilsJour(profile, cultures, legumesRef) {
   if (mois >= 4 && mois <= 6) alertesSaison.push('pluie_prolongee');
   if (mois >= 9 && mois <= 10) alertesSaison.push('pluie_prolongee');
 
+  const alertesSeen = new Set();
   for (const culture of culturesActives) {
     const ref = legumesRef.find(l => l.id === culture.legume_ref_id);
     const alertes = ref?.alertes_saisonnieres;
     if (!alertes || typeof alertes !== 'object') continue;
     for (const type of alertesSaison) {
       if (alertes[type]) {
-        result.alertes.push(`${culture.legume} : ${alertes[type]}`);
+        const msg = `${culture.legume} : ${alertes[type]}`;
+        if (alertesSeen.has(msg)) continue;
+        alertesSeen.add(msg);
+        result.alertes.push(msg);
       }
     }
   }
@@ -152,11 +156,14 @@ export function getConseilsJour(profile, cultures, legumesRef) {
     });
   }
 
-  // 6. Successions possibles (enrichies)
+  // 6. Successions possibles (enrichies) — une seule entrée par legume_ref_id
+  const successionsSeen = new Set();
   for (const culture of cultures || []) {
     if (culture.statut === 'termine') continue;
     const ref = legumesRef.find(l => l.id === culture.legume_ref_id);
     if (!ref?.successions?.length) continue;
+    if (successionsSeen.has(culture.legume_ref_id)) continue;
+    successionsSeen.add(culture.legume_ref_id);
     const suggestions = ref.successions.map(slugToNom);
 
     // Cas A : cultures en récolte
@@ -201,11 +208,14 @@ export function getConseilsJour(profile, cultures, legumesRef) {
     });
   }
 
-  // 7. Associations
+  // 7. Associations — une seule entrée par legume_ref_id
+  const associationsSeen = new Set();
   for (const culture of cultures || []) {
     if (culture.statut === 'termine') continue;
     const ref = legumesRef.find(l => l.id === culture.legume_ref_id);
     if (!ref) continue;
+    if (associationsSeen.has(culture.legume_ref_id)) continue;
+    associationsSeen.add(culture.legume_ref_id);
 
     const benefiques = (ref.associations || []).map(slugToNom);
     const eviter = (ref.rotations_eviter || []).map(slugToNom);

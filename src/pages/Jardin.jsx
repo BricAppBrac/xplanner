@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { getConseilsJour } from '../lib/conseils'
+import { getConseilsJour, getZone } from '../lib/conseils'
 import LegumeSearch from '../components/ui/LegumeSearch'
 
 const EMOJI_MAP = {
@@ -109,7 +109,7 @@ const COULEURS_STATUTS = {
   'seme_abri_godet': '#4a9e4a',
   'seme_place': '#4a9e4a',
   'plante': '#6dbf6d',
-  'recolte': '#873f5f',
+  'recolte': '#e88888',
   'termine': '#555',
 }
 
@@ -121,7 +121,7 @@ const STATUTS = [
   { value: 'seme_abri_godet', label: 'Semé en godet', color: '#4a9e4a' },
   { value: 'seme_place', label: 'Semé en place', color: '#4a9e4a' },
   { value: 'plante', label: 'Planté / repiqué', color: '#6dbf6d' },
-  { value: 'recolte', label: 'En récolte', color: '#873f5f' },
+  { value: 'recolte', label: 'En récolte', color: '#e88888' },
   { value: 'termine', label: 'Terminé', color: '#555' },
 ]
 
@@ -181,6 +181,16 @@ const ITINERAIRES_SUGGERES = {
   'Fraise': 'D', 'Ail': 'D', 'Échalote': 'D',
 }
 
+const INCIDENT_TYPES = [
+  { value: 'gel', emoji: '🧊', label: 'Gel' },
+  { value: 'grele', emoji: '🌩️', label: 'Grêle' },
+  { value: 'ravageurs', emoji: '🐛', label: 'Ravageurs' },
+  { value: 'maladie', emoji: '🍄', label: 'Maladie' },
+  { value: 'secheresse', emoji: '🌵', label: 'Sécheresse' },
+  { value: 'inondation', emoji: '🌊', label: 'Inondation' },
+  { value: 'autre', emoji: '❓', label: 'Autre' },
+]
+
 const formVide = { legume: '', legume_ref_id: null, variete: '', itineraire: null, date_semis: '', notes: '', nb_semis: 1, intervalle_semis_semaines: 2 }
 
 export default function Jardin({ profile, session, cultures: culturesProp, legumesRef: legumesRefProp, onCultureChanged }) {
@@ -190,7 +200,16 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
   const [form, setForm] = useState(formVide)
   const [saving, setSaving] = useState(false)
   const [confirmId, setConfirmId] = useState(null)      // culture.id en attente de confirmation
+  const [confirmDate, setConfirmDate] = useState('')    // date pour la progression
   const [choixItId, setChoixItId] = useState(null)       // culture.id qui a besoin d'un itinéraire
+  const [incidentId, setIncidentId] = useState(null)     // culture.id pour formulaire incident
+  const [incidentForm, setIncidentForm] = useState({ type: null, note: '', perte_pourcentage: 0 })
+  const [incidentSaving, setIncidentSaving] = useState(false)
+  const [recolteFinId, setRecolteFinId] = useState(null) // culture.id pour confirmation récolte terminée
+  const [recolteFinNote, setRecolteFinNote] = useState('')
+  const [recolteFinSaving, setRecolteFinSaving] = useState(false)
+  const [onboardingSeen, setOnboardingSeen] = useState(() => localStorage.getItem('onboarding_seen') === 'true')
+  const [incidents, setIncidents] = useState([])
 
   // Utiliser les props si disponibles, sinon fetch local
   const cultures = culturesProp || culturesLocal
@@ -200,6 +219,17 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
     if (session && !culturesProp) fetchCultures()
     if (session && !legumesRefProp) fetchLegumes()
   }, [session])
+
+  useEffect(() => {
+    if (session) fetchIncidents()
+  }, [session, culturesProp])
+
+  const fetchIncidents = async () => {
+    const { data } = await supabase.from('incidents').select('id, culture_id').eq('user_id', session.user.id)
+    if (data) setIncidents(data)
+  }
+
+  const hasIncident = (cultureId) => incidents.some(i => i.culture_id === cultureId)
 
   const fetchLegumes = async () => {
     const { data } = await supabase.from('legumes_ref').select('id, slug, nom').order('nom')
@@ -238,18 +268,20 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
     const suivant = getStatutSuivant(culture)
     if (!suivant) return
     setConfirmId(culture.id)
+    setConfirmDate(new Date().toISOString().split('T')[0])
     setChoixItId(null)
   }
 
   const confirmerProgression = async (culture) => {
     const suivant = getStatutSuivant(culture)
     if (!suivant) return
+    const dateChoisie = confirmDate || new Date().toISOString().split('T')[0]
     const updates = { statut: suivant }
     if (STATUTS_SEMIS.includes(suivant)) {
-      updates.date_semis = new Date().toISOString().split('T')[0]
+      updates.date_semis = dateChoisie
     }
     if (suivant === 'plante') {
-      updates.date_plantation = new Date().toISOString().split('T')[0]
+      updates.date_plantation = dateChoisie
     }
     await supabase.from('cultures').update(updates).eq('id', culture.id)
     if (onCultureChanged) onCultureChanged()
@@ -268,31 +300,134 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
     setChoixItId(null)
   }
 
+  const ouvrirIncident = (cultureId) => {
+    setIncidentId(cultureId)
+    setIncidentForm({ type: null, note: '', perte_pourcentage: 0 })
+    setConfirmId(null)
+    setChoixItId(null)
+    setRecolteFinId(null)
+  }
+
+  const enregistrerIncident = async (culture) => {
+    if (!incidentForm.type) return
+    setIncidentSaving(true)
+    await supabase.from('incidents').insert({
+      culture_id: culture.id,
+      user_id: session.user.id,
+      type: incidentForm.type,
+      note: incidentForm.note || null,
+      perte_pourcentage: incidentForm.perte_pourcentage,
+    })
+    if (incidentForm.perte_pourcentage === 100) {
+      await supabase.from('cultures').update({ statut: 'termine' }).eq('id', culture.id)
+    }
+    setIncidentSaving(false)
+    setIncidentId(null)
+    fetchIncidents()
+    if (onCultureChanged) onCultureChanged()
+    else fetchCultures()
+  }
+
+  const ouvrirRecolteFin = (cultureId) => {
+    setRecolteFinId(cultureId)
+    setRecolteFinNote('')
+    setConfirmId(null)
+    setChoixItId(null)
+    setIncidentId(null)
+  }
+
+  const confirmerRecolteFin = async (culture) => {
+    setRecolteFinSaving(true)
+    await supabase.from('cultures').update({ statut: 'termine' }).eq('id', culture.id)
+    await supabase.from('incidents').insert({
+      culture_id: culture.id,
+      user_id: session.user.id,
+      type: 'recolte_terminee',
+      note: recolteFinNote || null,
+      perte_pourcentage: 0,
+    })
+    setRecolteFinSaving(false)
+    setRecolteFinId(null)
+    fetchIncidents()
+    if (onCultureChanged) onCultureChanged()
+    else fetchCultures()
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.legume || !form.itineraire) return
     const itConfig = ITINERAIRES_CARTES.find(it => it.id === form.itineraire)
     setSaving(true)
-    const { data, error } = await supabase
-      .from('cultures')
-      .insert({
+
+    const nbSemis = form.nb_semis || 1
+    const groupeId = nbSemis > 1 ? crypto.randomUUID() : null
+    const intervalle = form.intervalle_semis_semaines || 2
+
+    // Calculer la date de base : saisie utilisateur ou auto depuis legumes_ref
+    let dateSemisBase = form.date_semis ? new Date(form.date_semis) : null
+    if (!dateSemisBase && form.legume_ref_id) {
+      const refLeg = legumesRef.find(l => l.id === form.legume_ref_id)
+      if (refLeg) {
+        const zone = getZone(profile)
+        const now = new Date()
+        now.setHours(0, 0, 0, 0)
+        const year = now.getFullYear()
+        // Chercher la première fenêtre de semis ouverte
+        for (const prefixe of ['semis_abri', 'semis_terre']) {
+          const debut = refLeg[`${prefixe}_${zone}_debut`]
+          if (debut) {
+            const [mm, dd] = debut.split('-').map(Number)
+            const d = new Date(year, mm - 1, dd)
+            dateSemisBase = d > now ? d : now
+            break
+          }
+        }
+        if (!dateSemisBase) dateSemisBase = now
+      }
+    }
+
+    let lastData = null
+    let lastError = null
+    for (let i = 0; i < nbSemis; i++) {
+      let dateSemisPrevue = new Date(dateSemisBase)
+      dateSemisPrevue.setDate(dateSemisPrevue.getDate() + i * intervalle * 7)
+      const payload = {
         user_id: session.user.id,
         legume: form.legume,
         legume_ref_id: form.legume_ref_id,
         variete: form.variete || null,
         statut: itConfig.statutInitial,
         itineraire: form.itineraire,
-        date_semis: form.date_semis || null,
+        date_semis: dateSemisPrevue ? dateSemisPrevue.toISOString().split('T')[0] : null,
         notes: form.notes || null,
-        nb_semis: form.nb_semis,
-        intervalle_semis_semaines: form.nb_semis > 1 ? form.intervalle_semis_semaines : null,
-      })
-      .select()
-      .single()
+        nb_semis: 1,
+        groupe_id: groupeId,
+        numero_semis: i + 1,
+        total_semis: nbSemis,
+      }
+      console.log(`[handleSubmit] Semis ${i + 1}/${nbSemis} — payload:`, payload)
+      const { data, error } = await supabase
+        .from('cultures')
+        .insert(payload)
+        .select()
+        .single()
+      if (error) {
+        console.error('[handleSubmit] Erreur Supabase:', error)
+        console.error('[handleSubmit] Message:', error.message)
+        console.error('[handleSubmit] Details:', error.details)
+        console.error('[handleSubmit] Hint:', error.hint)
+        console.error('[handleSubmit] Code:', error.code)
+      } else {
+        console.log('[handleSubmit] Succès:', data)
+      }
+      lastData = data
+      lastError = error
+    }
+
     setSaving(false)
-    if (!error && data) {
+    if (!lastError && lastData) {
       if (onCultureChanged) onCultureChanged()
-      else setCulturesLocal(prev => [data, ...prev])
+      else fetchCultures()
       fermer()
     }
   }
@@ -333,6 +468,187 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
     padding: '6px 12px', borderRadius: 8, marginBottom: 8,
   }
 
+  const renderBadge = (c, st, estTermine, cliquable) => (
+    <span
+      onClick={() => cliquable && handleBadgeClick(c)}
+      title={cliquable ? 'Cliquez pour faire évoluer' : undefined}
+      style={{
+        background: st.color + '22', color: st.color,
+        fontSize: 13, padding: '3px 10px', borderRadius: 20, fontWeight: 'bold',
+        cursor: cliquable ? 'pointer' : 'default',
+        transition: 'filter 0.15s',
+      }}
+      onMouseEnter={e => cliquable && (e.currentTarget.style.filter = 'brightness(1.3)')}
+      onMouseLeave={e => cliquable && (e.currentTarget.style.filter = 'brightness(1)')}
+    >
+      {estTermine ? '✓ Terminé' : `${st.label} →`}
+    </span>
+  )
+
+  const renderCarteActions = (c, estTermine, suivant) => (
+    <>
+      {c.notes && (
+        <div style={{ color: '#7daa7d', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>{c.notes}</div>
+      )}
+      {!estTermine && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+          <span
+            onClick={() => ouvrirIncident(c.id)}
+            style={hasIncident(c.id) ? {
+              fontSize: 14, cursor: 'pointer', color: '#e88888',
+              background: 'rgba(255,120,80,0.15)', border: '1px solid #c45555',
+              borderRadius: 8, padding: '4px 10px',
+              fontFamily: 'Amaranth, sans-serif', fontWeight: 'bold',
+              transition: 'filter 0.15s',
+            } : {
+              fontSize: 14, cursor: 'pointer', color: '#7ab8d4',
+              background: 'rgba(74,127,165,0.15)', border: '1px solid #4a7fa5',
+              borderRadius: 8, padding: '4px 10px',
+              fontFamily: 'Amaranth, sans-serif', fontWeight: 'bold',
+              transition: 'filter 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.3)'}
+            onMouseLeave={e => e.currentTarget.style.filter = 'brightness(1)'}
+          >{hasIncident(c.id) ? '⚠️ Incident' : '⚠️ Incident ?'}</span>
+          {c.statut === 'recolte' && (
+            <span
+              onClick={() => ouvrirRecolteFin(c.id)}
+              style={{
+                fontSize: 14, cursor: 'pointer', color: '#e88888',
+                background: 'rgba(180,50,50,0.15)', border: '1px solid #c45555',
+                padding: '4px 10px', borderRadius: 8, fontWeight: 'bold',
+                fontFamily: 'Amaranth, sans-serif',
+                transition: 'filter 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.3)'}
+              onMouseLeave={e => e.currentTarget.style.filter = 'brightness(1)'}
+            >🧺 Récolte terminée ?</span>
+          )}
+        </div>
+      )}
+      {incidentId === c.id && (
+        <div style={{
+          marginTop: 10, padding: '12px 14px',
+          background: 'rgba(240,165,0,0.06)',
+          border: '1px solid rgba(240,165,0,0.25)',
+          borderRadius: 10,
+        }}>
+          <div style={{ color: '#f0a500', fontSize: 15, fontWeight: 'bold', marginBottom: 10 }}>
+            ⚠️ Signaler un incident
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {INCIDENT_TYPES.map(t => (
+              <span
+                key={t.value}
+                onClick={() => setIncidentForm(prev => ({ ...prev, type: t.value }))}
+                style={{
+                  padding: '5px 10px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
+                  background: incidentForm.type === t.value ? 'rgba(240,165,0,0.2)' : 'rgba(255,255,255,0.05)',
+                  border: incidentForm.type === t.value ? '1px solid #f0a500' : '1px solid rgba(109,191,109,0.15)',
+                  color: incidentForm.type === t.value ? '#f0a500' : '#a8d5a2',
+                  fontFamily: 'Amaranth, sans-serif',
+                }}
+              >{t.emoji} {t.label}</span>
+            ))}
+          </div>
+          <input type="text" placeholder="Précise si besoin..." value={incidentForm.note}
+            onChange={e => setIncidentForm(prev => ({ ...prev, note: e.target.value }))}
+            style={{ ...inputStyle, marginBottom: 10, fontSize: 14 }}
+          />
+          <div style={{ marginBottom: 6 }}>
+            <label style={{ color: '#a8d5a2', fontSize: 13 }}>
+              Perte estimée : <strong style={{ color: '#e8f5e8' }}>{incidentForm.perte_pourcentage}%</strong>
+            </label>
+            <input type="range" min={0} max={100} step={5} value={incidentForm.perte_pourcentage}
+              onChange={e => setIncidentForm(prev => ({ ...prev, perte_pourcentage: parseInt(e.target.value) }))}
+              style={{ width: '100%', accentColor: '#6dbf6d', marginTop: 4 }}
+            />
+          </div>
+          <div style={{ fontSize: 13, fontStyle: 'italic', marginBottom: 10, color: incidentForm.perte_pourcentage === 100 ? '#f0a500' : '#6dbf6d' }}>
+            {incidentForm.perte_pourcentage === 100 ? '⚠️ Perte totale — cette culture sera clôturée' : 'La culture reste active'}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => enregistrerIncident(c)} disabled={!incidentForm.type || incidentSaving}
+              style={{ padding: '6px 14px', background: (!incidentForm.type || incidentSaving) ? '#3a5a3a' : 'linear-gradient(135deg, #4a7c4a, #6dbf6d)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, cursor: (!incidentForm.type || incidentSaving) ? 'not-allowed' : 'pointer', fontFamily: 'Amaranth, sans-serif', opacity: !incidentForm.type ? 0.5 : 1 }}
+            >{incidentSaving ? 'Enregistrement...' : 'Enregistrer'}</button>
+            <button onClick={() => setIncidentId(null)}
+              style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8, color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif' }}
+            >Annuler</button>
+          </div>
+        </div>
+      )}
+      {recolteFinId === c.id && (
+        <div style={{ marginTop: 10, padding: '12px 14px', background: 'rgba(135,63,95,0.08)', border: '1px solid rgba(135,63,95,0.25)', borderRadius: 10 }}>
+          <div style={{ color: '#e8f5e8', fontSize: 14, marginBottom: 8 }}>
+            🧺 Confirmer la fin de récolte de tes <strong style={{ color: '#873f5f' }}>{c.legume}</strong> ?
+          </div>
+          <input type="text" placeholder="Une dernière remarque ?" value={recolteFinNote} onChange={e => setRecolteFinNote(e.target.value)} style={{ ...inputStyle, marginBottom: 10, fontSize: 14 }} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => confirmerRecolteFin(c)} disabled={recolteFinSaving}
+              style={{ padding: '6px 14px', background: recolteFinSaving ? '#3a5a3a' : 'linear-gradient(135deg, #4a7c4a, #6dbf6d)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, cursor: recolteFinSaving ? 'not-allowed' : 'pointer', fontFamily: 'Amaranth, sans-serif' }}
+            >✓ Confirmer</button>
+            <button onClick={() => setRecolteFinId(null)}
+              style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8, color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif' }}
+            >Annuler</button>
+          </div>
+        </div>
+      )}
+      {confirmId === c.id && suivant && (
+        <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(109,191,109,0.08)', border: '1px solid rgba(109,191,109,0.25)', borderRadius: 10 }}>
+          <div style={{ color: '#e8f5e8', fontSize: 14, marginBottom: 8 }}>
+            Passer à : <strong style={{ color: '#6dbf6d' }}>{LABELS_STATUTS[suivant]}</strong> ?
+          </div>
+          {(STATUTS_SEMIS.includes(suivant) || suivant === 'plante') && (
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ color: '#a8d5a2', fontSize: 13, display: 'block', marginBottom: 4 }}>
+                {suivant === 'plante' ? 'Date de plantation' : 'Date de semis'}
+              </label>
+              <input type="date" value={confirmDate} onChange={e => setConfirmDate(e.target.value)}
+                style={{ ...inputStyle, fontSize: 14, padding: '6px 10px' }} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => confirmerProgression(c)} style={{ padding: '6px 14px', background: 'linear-gradient(135deg, #4a7c4a, #6dbf6d)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif' }}>✓ Confirmer</button>
+            <button onClick={() => setConfirmId(null)} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8, color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif' }}>✗ Annuler</button>
+          </div>
+        </div>
+      )}
+      {choixItId === c.id && (
+        <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(109,191,109,0.08)', border: '1px solid rgba(109,191,109,0.25)', borderRadius: 10 }}>
+          <div style={{ color: '#e8f5e8', fontSize: 14, marginBottom: 10 }}>Quel est ton itinéraire pour ce légume ?</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ITINERAIRES_CARTES.map(it => (
+              <div key={it.id} onClick={() => assignerItineraire(c.id, it.id)} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(109,191,109,0.2)', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}>
+                <div style={{ color: '#e8f5e8', fontSize: 14, fontWeight: 'bold' }}>{it.emoji} {it.titre}</div>
+                <div style={{ color: '#a8d5a2', fontSize: 12 }}>{it.desc}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setChoixItId(null)} style={{ marginTop: 8, padding: '6px 14px', background: 'transparent', border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8, color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif' }}>✗ Annuler</button>
+        </div>
+      )}
+    </>
+  )
+
+  const labelDate = (c) => {
+    if ((c.statut === 'a_semer' || c.statut === 'a_planter') && c.date_semis && c.date_semis !== '1970-01-01') {
+      const d = new Date(c.date_semis)
+      const now = new Date(); now.setHours(0, 0, 0, 0)
+      if (d < now) return { text: '⚠️ Statut à mettre à jour', color: '#f0a500' }
+    }
+    const text = (() => {
+      switch (c.statut) {
+        case 'a_semer': case 'a_planter': return 'Prévu le'
+        case 'seme_abri_plateau': case 'seme_abri_godet': case 'seme_place': return 'Semé le'
+        case 'plante': return 'Planté le'
+        case 'recolte': return 'En récolte depuis le'
+        case 'termine': return 'Terminé le'
+        default: return 'Date'
+      }
+    })()
+    return { text, color: null }
+  }
+
   const hasCultures = cultures.length > 0
   const hasConseils = conseils.taches_urgentes.length > 0
     || conseils.recoltes_prochaines.length > 0
@@ -354,120 +670,133 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
         </button>
       </div>
 
+      {/* Bandeau d'onboarding */}
+      {!onboardingSeen && hasCultures && (
+        <div style={{
+          background: 'rgba(109,191,109,0.1)',
+          border: '1px solid rgba(109,191,109,0.3)',
+          borderRadius: 10, padding: 12, marginBottom: 16,
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div style={{ color: '#a8d5a2', fontSize: 14, fontFamily: 'Amaranth, sans-serif', textAlign: 'left' }}>
+            <div style={{ marginBottom: 6 }}>
+              Clique sur le statut
+              <span style={{
+                background: '#f0a50022', color: '#f0a500',
+                fontSize: 13, padding: '3px 10px', borderRadius: 20, fontWeight: 'bold',
+                marginLeft: 6, marginRight: 6, display: 'inline-block',
+              }}>À semer →</span>
+              d'une culture pour le faire évoluer.
+            </div>
+            <div>
+              Utilise
+              <span style={{
+                fontSize: 14, color: '#7ab8d4',
+                background: 'rgba(74,127,165,0.15)', border: '1px solid #4a7fa5',
+                borderRadius: 8, padding: '2px 8px', fontWeight: 'bold',
+                marginLeft: 6, marginRight: 4, display: 'inline-block',
+              }}>⚠️ Incident ?</span>
+              pour signaler un problème ou une perte.
+            </div>
+          </div>
+          <button
+            onClick={() => { localStorage.setItem('onboarding_seen', 'true'); setOnboardingSeen(true) }}
+            style={{
+              padding: '4px 12px', background: 'linear-gradient(135deg, #4a7c4a, #6dbf6d)',
+              border: 'none', borderRadius: 8, color: '#fff', fontSize: 13,
+              cursor: 'pointer', fontFamily: 'Amaranth, sans-serif', flexShrink: 0,
+            }}
+          >✓ Compris</button>
+        </div>
+      )}
+
       {!hasCultures ? (
         <p style={{ color: '#6dbf6d', fontSize: 16 }}>
           Aucune culture pour l'instant. Ajoute ta première !
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {cultures.map(c => {
-            const st = statutInfo(c.statut)
-            const estTermine = c.statut === 'termine'
-            const suivant = c.itineraire ? getStatutSuivant(c) : null
-            const cliquable = !estTermine
-
-            return (
-              <div key={c.id} style={{
-                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(109,191,109,0.15)',
-                borderRadius: 12, padding: '14px 16px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: '#e8f5e8', fontSize: 18, fontWeight: 'bold' }}>
-                    {c.legume}{c.variete ? ` – ${c.variete}` : ''}
-                  </span>
-                  <span
-                    onClick={() => cliquable && handleBadgeClick(c)}
-                    style={{
-                      background: st.color + '22', color: st.color,
-                      fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 'bold',
-                      cursor: cliquable ? 'pointer' : 'default',
-                      transition: 'filter 0.15s',
-                    }}
-                    onMouseEnter={e => cliquable && (e.currentTarget.style.filter = 'brightness(1.3)')}
-                    onMouseLeave={e => cliquable && (e.currentTarget.style.filter = 'brightness(1)')}
-                  >
-                    {estTermine ? '✓ Terminé' : `${st.label} →`}
-                  </span>
+          {(() => {
+            // Grouper les cultures par groupe_id
+            const groupes = []
+            const seen = new Set()
+            for (const c of cultures) {
+              if (seen.has(c.id)) continue
+              if (c.groupe_id) {
+                if (seen.has(c.groupe_id)) continue
+                seen.add(c.groupe_id)
+                const membres = cultures.filter(x => x.groupe_id === c.groupe_id).sort((a, b) => (a.numero_semis || 1) - (b.numero_semis || 1))
+                membres.forEach(m => seen.add(m.id))
+                groupes.push({ type: 'groupe', groupe_id: c.groupe_id, membres })
+              } else {
+                seen.add(c.id)
+                groupes.push({ type: 'solo', culture: c })
+              }
+            }
+            return groupes.map(g => {
+              if (g.type === 'groupe') {
+                const premier = g.membres[0]
+                return (
+                  <div key={g.groupe_id}>
+                    <div style={{
+                      fontSize: 18, fontWeight: 'bold', color: '#e8f5e8',
+                      fontFamily: 'Amaranth, sans-serif', marginBottom: 8,
+                    }}>
+                      {getEmoji(premier.legume)} {premier.legume}{premier.variete ? ` – ${premier.variete}` : ''} — {premier.total_semis || g.membres.length} semis échelonnés
+                    </div>
+                    {g.membres.map((c, idx) => {
+                      const st = statutInfo(c.statut)
+                      const estTermine = c.statut === 'termine'
+                      const suivant = c.itineraire ? getStatutSuivant(c) : null
+                      const cliquable = !estTermine
+                      return (
+                        <div key={c.id} style={{
+                          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(109,191,109,0.15)',
+                          borderRadius: 12, padding: '12px 16px', marginLeft: 16,
+                          marginBottom: idx < g.membres.length - 1 ? 4 : 0,
+                          borderTop: idx > 0 ? '1px solid rgba(109,191,109,0.08)' : undefined,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ color: '#a8d5a2', fontSize: 15, fontWeight: 'bold' }}>
+                              Semis {c.numero_semis || (idx + 1)}/{c.total_semis || g.membres.length}
+                            </span>
+                            {renderBadge(c, st, estTermine, cliquable)}
+                          </div>
+                          <div style={{ color: '#a8d5a2', fontSize: 12 }}>
+                            {(() => { const ld = labelDate(c); const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
+                          </div>
+                          {renderCarteActions(c, estTermine, suivant)}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              }
+              // Solo
+              const c = g.culture
+              const st = statutInfo(c.statut)
+              const estTermine = c.statut === 'termine'
+              const suivant = c.itineraire ? getStatutSuivant(c) : null
+              const cliquable = !estTermine
+              return (
+                <div key={c.id} style={{
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(109,191,109,0.15)',
+                  borderRadius: 12, padding: '14px 16px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: '#e8f5e8', fontSize: 18, fontWeight: 'bold' }}>
+                      {c.legume}{c.variete ? ` – ${c.variete}` : ''}
+                    </span>
+                    {renderBadge(c, st, estTermine, cliquable)}
                 </div>
                 <div style={{ color: '#a8d5a2', fontSize: 12 }}>
-                  {(!c.date_semis || c.date_semis === '1970-01-01') ? 'Semis : à planifier' : 'Semis : ' + new Date(c.date_semis).toLocaleDateString('fr-FR')}
+                  {(() => { const ld = labelDate(c); const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
                 </div>
-                {c.notes && (
-                  <div style={{ color: '#7daa7d', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>{c.notes}</div>
-                )}
-
-                {/* Confirmation de progression */}
-                {confirmId === c.id && suivant && (
-                  <div style={{
-                    marginTop: 10, padding: '10px 14px',
-                    background: 'rgba(109,191,109,0.08)',
-                    border: '1px solid rgba(109,191,109,0.25)',
-                    borderRadius: 10,
-                  }}>
-                    <div style={{ color: '#e8f5e8', fontSize: 14, marginBottom: 8 }}>
-                      Passer à : <strong style={{ color: '#6dbf6d' }}>{LABELS_STATUTS[suivant]}</strong> ?
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={() => confirmerProgression(c)}
-                        style={{
-                          padding: '6px 14px', background: 'linear-gradient(135deg, #4a7c4a, #6dbf6d)',
-                          border: 'none', borderRadius: 8, color: '#fff', fontSize: 13,
-                          cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
-                        }}
-                      >✓ Confirmer</button>
-                      <button
-                        onClick={() => setConfirmId(null)}
-                        style={{
-                          padding: '6px 14px', background: 'transparent',
-                          border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8,
-                          color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
-                        }}
-                      >✗ Annuler</button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Choix d'itinéraire pour cultures anciennes */}
-                {choixItId === c.id && (
-                  <div style={{
-                    marginTop: 10, padding: '10px 14px',
-                    background: 'rgba(109,191,109,0.08)',
-                    border: '1px solid rgba(109,191,109,0.25)',
-                    borderRadius: 10,
-                  }}>
-                    <div style={{ color: '#e8f5e8', fontSize: 14, marginBottom: 10 }}>
-                      Quel est ton itinéraire pour ce légume ?
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {ITINERAIRES_CARTES.map(it => (
-                        <div
-                          key={it.id}
-                          onClick={() => assignerItineraire(c.id, it.id)}
-                          style={{
-                            background: 'rgba(255,255,255,0.03)',
-                            border: '1px solid rgba(109,191,109,0.2)',
-                            borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
-                          }}
-                        >
-                          <div style={{ color: '#e8f5e8', fontSize: 14, fontWeight: 'bold' }}>{it.emoji} {it.titre}</div>
-                          <div style={{ color: '#a8d5a2', fontSize: 12 }}>{it.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setChoixItId(null)}
-                      style={{
-                        marginTop: 8, padding: '6px 14px', background: 'transparent',
-                        border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8,
-                        color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
-                      }}
-                    >✗ Annuler</button>
-                  </div>
-                )}
+                {renderCarteActions(c, estTermine, suivant)}
               </div>
-            )
-          })}
+              )
+            })
+          })()}
         </div>
       )}
 

@@ -1,4 +1,49 @@
 import { getZone } from './conseils'
+import { supabase } from './supabase'
+
+const INCIDENT_COLORS = {
+  gel: '#c0392b',
+  grele: '#c0392b',
+  ravageurs: '#e67e22',
+  maladie: '#e67e22',
+  secheresse: '#f39c12',
+  inondation: '#2980b9',
+  autre: '#7f8c8d',
+  recolte_terminee: '#873f5f',
+}
+
+const INCIDENT_EMOJIS = {
+  gel: '🧊',
+  grele: '🌩️',
+  ravageurs: '🐛',
+  maladie: '🍄',
+  secheresse: '🌵',
+  inondation: '🌊',
+  autre: '❓',
+  recolte_terminee: '🧺',
+}
+
+const INCIDENT_LABELS = {
+  gel: 'Gel',
+  grele: 'Grêle',
+  ravageurs: 'Ravageurs',
+  maladie: 'Maladie',
+  secheresse: 'Sécheresse',
+  inondation: 'Inondation',
+  autre: 'Autre',
+  recolte_terminee: 'Récolte terminée',
+}
+
+export async function chargerIncidents(userId) {
+  const { data } = await supabase
+    .from('incidents')
+    .select('*, cultures(legume, variete)')
+    .eq('user_id', userId)
+    .order('date_incident', { ascending: true })
+  return data || []
+}
+
+export { INCIDENT_COLORS, INCIDENT_EMOJIS, INCIDENT_LABELS }
 
 function mmddToDate(mmdd, year) {
   if (!mmdd) return null;
@@ -42,6 +87,38 @@ function getDateSemisRef(culture) {
   return null;
 }
 
+function makeEvtId(cultureId, type, label, dateStr) {
+  return `${cultureId}_${type}_${label}_${dateStr}`;
+}
+
+function getProjectedSemisDate(culture, allCultures, ref, zone, year) {
+  const ds = culture.date_semis ? new Date(culture.date_semis) : null;
+  if (ds && ds.getFullYear() > 2000) return ds;
+
+  if (culture.groupe_id && (culture.numero_semis || 1) > 1) {
+    const leader = allCultures.find(c =>
+      c.groupe_id === culture.groupe_id && (c.numero_semis || 1) === 1
+    );
+    if (leader) {
+      const leaderDate = getProjectedSemisDate(leader, allCultures, ref, zone, year);
+      if (leaderDate) {
+        const intervalle = ref?.intervalle_echelonnement_jours || 21;
+        const proj = new Date(leaderDate);
+        proj.setDate(proj.getDate() + (culture.numero_semis - 1) * intervalle);
+        return proj;
+      }
+    }
+  }
+
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const abriDebut = ref?.[`semis_abri_${zone}_debut`];
+  if (abriDebut) {
+    const refDate = mmddToDate(abriDebut, year);
+    return refDate > now ? refDate : now;
+  }
+  return now;
+}
+
 export function calculerCalendrier(profile, cultures, legumesRef) {
   const zone = getZone(profile);
   const now = new Date();
@@ -55,82 +132,47 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
 
     const nom = culture.legume || ref.nom;
     const variete = culture.variete || '';
-    const nbSemis = culture.nb_semis || 1;
-    const intervalle = culture.intervalle_semis_semaines || 3;
     const statutCulture = culture.statut;
     const itineraire = culture.itineraire;
     const dateSemisRef = getDateSemisRef(culture);
+    const totalSemis = culture.total_semis || 1;
+    const numSemis = culture.numero_semis || 1;
+    const semisTag = totalSemis > 1 ? ` ${numSemis}/${totalSemis}` : '';
 
     const semisFait = SEMIS_FAITS.includes(statutCulture);
     const godetFait = GODET_FAIT.includes(statutCulture);
     const plantationFaite = PLANTATION_FAITE.includes(statutCulture);
     const recolteFaite = RECOLTE_FAITE.includes(statutCulture);
 
-    // Cultures en attente : événement "À faire"
-    if (statutCulture === 'a_semer' || statutCulture === 'a_planter') {
-      const dateAjout = culture.created_at ? new Date(culture.created_at) : now;
-      let labelAfaire;
-      if (itineraire === 'D') labelAfaire = '🛒 Plantation prévue';
-      else if (itineraire === 'C') labelAfaire = '🌍 Semis en place prévu';
-      else labelAfaire = '🌱 Semis sous abri prévu';
-      evenements.push({
-        date: dateAjout,
-        legume: nom, variete, slug: ref.slug,
-        cultureId: culture.id, itineraire,
-        type: 'a_faire', label: labelAfaire,
-        statut: 'a_faire',
-      });
-    }
-
-    // ── SEMIS ──
+    // ── SEMIS (1 culture = 1 événement semis) ──
     if (itineraire === 'A') {
-      // Itinéraire A : deux événements — plateau + repiquage godets
-      const abriDebut = ref[`semis_abri_${zone}_debut`];
-      const abriFin = ref[`semis_abri_${zone}_fin`];
+      const baseA = getProjectedSemisDate(culture, cultures, ref, zone, year);
 
-      for (let i = 0; i < nbSemis; i++) {
-        const suffix = nbSemis > 1 ? ` ${i + 1}/${nbSemis}` : '';
-        const decalage = i * intervalle * 7;
-
-        // Événement 1 : Semis en plateau
-        let datePlateau;
-        if (semisFait && dateSemisRef && i === 0) {
-          datePlateau = new Date(dateSemisRef);
-        } else if (abriDebut) {
-          datePlateau = mmddToDate(abriDebut, year);
-          if (datePlateau) datePlateau.setDate(datePlateau.getDate() + decalage);
-        }
-        if (datePlateau) {
-          const debutDate = abriDebut ? mmddToDate(abriDebut, year) : null;
-          const finDate = abriFin ? mmddToDate(abriFin, year) : null;
-          evenements.push({
-            date: datePlateau,
-            legume: nom, variete, slug: ref.slug,
-            cultureId: culture.id, itineraire,
-            type: 'semis', label: `🌱 Semis en plateau sous abri${suffix}`,
-            statut: badgeEvt(datePlateau, now, semisFait),
-          });
-        }
-
-        // Événement 2 : Repiquage en godets (+21 jours)
-        const baseGodet = (semisFait && dateSemisRef && i === 0) ? new Date(dateSemisRef) : (abriDebut ? mmddToDate(abriDebut, year) : null);
-        if (baseGodet) {
-          const dateGodet = new Date(baseGodet);
-          dateGodet.setDate(dateGodet.getDate() + 21 + decalage);
-          evenements.push({
-            date: dateGodet,
-            legume: nom, variete, slug: ref.slug,
-            cultureId: culture.id, itineraire,
-            type: 'semis', label: `🪴 Repiquage en godets${suffix}`,
-            statut: badgeEvt(dateGodet, now, godetFait),
-          });
-        }
+      if (baseA) {
+        // Semis en plateau
+        evenements.push({
+          date: new Date(baseA),
+          legume: nom, variete, slug: ref.slug,
+          cultureId: culture.id, itineraire,
+          type: 'semis', label: `🌱 Semis en plateau sous abri${semisTag}`,
+          statut: badgeEvt(new Date(baseA), now, semisFait),
+        });
+        // Repiquage en godets (+21 jours)
+        const dateGodet = new Date(baseA);
+        dateGodet.setDate(dateGodet.getDate() + 21);
+        evenements.push({
+          date: dateGodet,
+          legume: nom, variete, slug: ref.slug,
+          cultureId: culture.id, itineraire,
+          type: 'semis', label: `🪴 Repiquage en godets${semisTag}`,
+          statut: badgeEvt(dateGodet, now, godetFait),
+        });
       }
     } else if (itineraire !== 'D') {
-      // Itinéraires B et C — semis classique
+      // Itinéraires B et C — un seul semis par culture
       const sources = [
-        { prefixe: 'semis_abri', label: itineraire === 'B' ? '🌱 Semis en godet sous abri' : '🌱 Semis sous abri' },
-        { prefixe: 'semis_terre', label: '🌱 Semis en pleine terre' },
+        { prefixe: 'semis_abri', label: itineraire === 'B' ? `🌱 Semis en godet sous abri${semisTag}` : `🌱 Semis sous abri${semisTag}` },
+        { prefixe: 'semis_terre', label: `🌱 Semis en pleine terre${semisTag}` },
       ];
 
       for (const { prefixe, label } of sources) {
@@ -139,100 +181,75 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
         if (!debut || !fin) continue;
 
         const debutDate = mmddToDate(debut, year);
-        const finDate = mmddToDate(fin, year);
         if (!debutDate) continue;
-        if (finDate && finDate < debutDate) finDate.setFullYear(finDate.getFullYear() + 1);
 
-        for (let i = 0; i < nbSemis; i++) {
-          const semisLabel = nbSemis > 1 ? `${label} ${i + 1}/${nbSemis}` : label;
-
-          if (semisFait && dateSemisRef && i === 0) {
-            evenements.push({
-              date: new Date(dateSemisRef),
-              legume: nom, variete, slug: ref.slug,
-              cultureId: culture.id, itineraire,
-              type: 'semis', label: semisLabel,
-              statut: 'fait',
-            });
-          } else {
-            const date = new Date(debutDate);
-            date.setDate(date.getDate() + i * intervalle * 7);
-            evenements.push({
-              date,
-              legume: nom, variete, slug: ref.slug,
-              cultureId: culture.id, itineraire,
-              type: 'semis', label: semisLabel,
-              statut: badgeEvt(date, now, semisFait),
-            });
-          }
-        }
+        const base = getProjectedSemisDate(culture, cultures, ref, zone, year);
+        evenements.push({
+          date: base,
+          legume: nom, variete, slug: ref.slug,
+          cultureId: culture.id, itineraire,
+          type: 'semis', label,
+          statut: semisFait ? 'fait' : badgeEvt(base, now, false),
+        });
       }
     }
     // Itinéraire D : pas de semis
 
-    // ── PLANTATION & RÉCOLTE ──
+    // ── PLANTATION & RÉCOLTE (1 par culture) ──
     const plantDebut = ref[`plantation_${zone}_debut`];
-    const plantFin = ref[`plantation_${zone}_fin`];
     const recDebut = ref[`recolte_${zone}_debut`];
-    const recFin = ref[`recolte_${zone}_fin`];
-    const decalageJours = intervalle * 7;
 
-    for (let i = 0; i < nbSemis; i++) {
-      const decalage = i * decalageJours;
-      const suffix = nbSemis > 1 ? ` ${i + 1}/${nbSemis}` : '';
+    const basePlant = (plantationFaite && culture.date_plantation) ? new Date(culture.date_plantation) : (plantDebut ? mmddToDate(plantDebut, year) : null);
+    const baseRec = recDebut ? mmddToDate(recDebut, year) : null;
 
-      if (plantDebut) {
-        if (plantationFaite && culture.date_plantation && i === 0) {
-          evenements.push({
-            date: new Date(culture.date_plantation),
-            legume: nom, variete, slug: ref.slug,
-            cultureId: culture.id, itineraire,
-            type: 'plantation', label: `🪴 Plantation${suffix}`,
-            statut: 'fait',
-          });
-        } else {
-          const plantDate = mmddToDate(plantDebut, year);
-          const plantFinDate = plantFin ? mmddToDate(plantFin, year) : null;
-          if (plantDate) {
-            const date = new Date(plantDate);
-            date.setDate(date.getDate() + decalage);
-            evenements.push({
-              date,
-              legume: nom, variete, slug: ref.slug,
-              cultureId: culture.id, itineraire,
-              type: 'plantation', label: `🪴 Plantation${suffix}`,
-              statut: badgeEvt(date, now, plantationFaite),
-            });
-          }
-        }
-      }
+    if (basePlant) {
+      evenements.push({
+        date: new Date(basePlant),
+        legume: nom, variete, slug: ref.slug,
+        cultureId: culture.id, itineraire,
+        type: 'plantation', label: `🪴 Plantation${semisTag}`,
+        statut: plantationFaite ? 'fait' : badgeEvt(new Date(basePlant), now, false),
+      });
+    }
 
-      if (recDebut) {
-        const recDate = mmddToDate(recDebut, year);
-        const recFinDate = recFin ? mmddToDate(recFin, year) : null;
-        if (recDate) {
-          const date = new Date(recDate);
-          date.setDate(date.getDate() + decalage);
-          let evtStatut;
-          if (statutCulture === 'recolte') evtStatut = 'en_cours';
-          else if (recolteFaite) evtStatut = 'fait';
-          else evtStatut = badgeEvt(date, now, false);
-          evenements.push({
-            date,
-            legume: nom, variete, slug: ref.slug,
-            cultureId: culture.id, itineraire,
-            type: 'recolte', label: `🧺 Début de récolte${suffix}`,
-            statut: evtStatut,
-          });
-        }
-      }
+    if (baseRec) {
+      let evtStatut;
+      if (statutCulture === 'recolte') evtStatut = 'en_cours';
+      else if (recolteFaite) evtStatut = 'fait';
+      else evtStatut = badgeEvt(new Date(baseRec), now, false);
+      evenements.push({
+        date: new Date(baseRec),
+        legume: nom, variete, slug: ref.slug,
+        cultureId: culture.id, itineraire,
+        type: 'recolte', label: `🧺 Début de récolte${semisTag}`,
+        statut: evtStatut,
+      });
     }
   }
 
-  evenements.sort((a, b) => a.date - b.date);
+  // Générer un evtId unique pour chaque événement
+  for (const evt of evenements) {
+    const dateStr = evt.date.toISOString().split('T')[0];
+    evt.evtId = makeEvtId(evt.cultureId, evt.type, evt.label, dateStr);
+  }
+
+  // Collecter tous les événements masqués
+  const masques = new Set();
+  for (const culture of cultures || []) {
+    if (culture.evenements_masques) {
+      for (const m of culture.evenements_masques) masques.add(m);
+    }
+  }
+
+  // Filtrer les événements masqués
+  const filtres = masques.size > 0
+    ? evenements.filter(evt => !masques.has(evt.evtId))
+    : evenements;
+
+  filtres.sort((a, b) => a.date - b.date);
 
   const parMois = {};
-  for (const evt of evenements) {
+  for (const evt of filtres) {
     const key = `${evt.date.getFullYear()}-${String(evt.date.getMonth() + 1).padStart(2, '0')}`;
     if (!parMois[key]) parMois[key] = [];
     parMois[key].push(evt);

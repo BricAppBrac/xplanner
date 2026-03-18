@@ -171,7 +171,7 @@ if (isNewUser) return (
       {/* Contenu principal */}
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
         {onglet === 'jardin' && <Jardin profile={profile} session={session} cultures={cultures} legumesRef={legumesRef} onCultureChanged={reloadCultures} />}
-        {onglet === 'agenda' && <Agenda profile={profile} cultures={cultures} legumesRef={legumesRef} onCultureChanged={reloadCultures} />}
+        {onglet === 'agenda' && <Agenda profile={profile} session={session} cultures={cultures} legumesRef={legumesRef} onCultureChanged={reloadCultures} />}
         {onglet === 'fiches' && <Fiches legumesRef={legumesRef} profile={profile} />}
         {onglet === 'calendrier' && <Calendrier profile={profile} legumesRef={legumesRef} />}
       </div>
