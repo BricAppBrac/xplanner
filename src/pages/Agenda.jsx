@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { calculerCalendrier, chargerIncidents, INCIDENT_COLORS, INCIDENT_EMOJIS, INCIDENT_LABELS } from '../lib/calendrier'
-import { getNow } from '../lib/dateTest'
+import { getNow, toLocalDateStr } from '../lib/dateTest'
 
 const EMOJI_MAP = {
   tomate: '🍅', courgette: '🥒', concombre: '🥒',
@@ -59,9 +59,15 @@ function formatDateOrdinal(date) {
 function getLabelDate(evt) {
   const now = getNow(); now.setHours(0, 0, 0, 0)
   const d = new Date(evt.date); d.setHours(0, 0, 0, 0)
+  // Non confirmé → toujours "Saisi le", quelle que soit la date
+  if (evt.type === 'semis' && (evt.statutCulture === 'a_semer' || evt.statutCulture === 'a_planter')) return 'Saisi le'
+  if (evt.type === 'plantation' && evt.statutCulture === 'a_planter') return 'Saisi le'
+  // Récolte non confirmée → toujours "Prévu le"
+  if (evt.type === 'recolte' && evt.statutCulture !== 'recolte' && evt.statutCulture !== 'termine') return 'Prévu le'
+  // Confirmé + date future → "Prévu le"
   if (d > now) return 'Prévu le'
-  if (evt.type === 'semis') return (evt.statutCulture === 'a_semer' || evt.statutCulture === 'a_planter') ? 'Saisi le' : 'Semé le'
-  if (evt.type === 'plantation') return (evt.statutCulture === 'a_planter') ? 'Saisi le' : 'Planté le'
+  if (evt.type === 'semis') return 'Semé le'
+  if (evt.type === 'plantation') return 'Planté le'
   if (evt.type === 'recolte') return 'Récolté le'
   return null
 }
@@ -122,6 +128,17 @@ function BadgeStatut({ statut, type }) {
         padding: '2px 8px', borderRadius: 10,
       }}>
         À venir
+      </span>
+    )
+  }
+  if (statut === 'a_planifier') {
+    return (
+      <span style={{
+        background: 'rgba(240,165,0,0.2)', color: '#f0a500',
+        fontSize: 13, fontWeight: 'bold',
+        padding: '2px 8px', borderRadius: 10,
+      }}>
+        À planifier
       </span>
     )
   }
@@ -250,7 +267,7 @@ export default function Agenda({ profile, session, cultures, legumesRef, onCultu
 
   const ouvrirEditIncident = (evtKey, evt) => {
     setEditId(evtKey)
-    setEditForm({ type: evt.incidentType, note: evt.incidentNote || '', perte_pourcentage: evt.incidentPerte || 0 })
+    setEditForm({ type: evt.incidentType, note: evt.incidentNote || '', perte_pourcentage: evt.incidentPerte || 0, date_incident: toLocalDateStr(evt.date) })
     setDeleteId(null)
   }
 
@@ -261,6 +278,7 @@ export default function Agenda({ profile, session, cultures, legumesRef, onCultu
       type: editForm.type,
       note: editForm.note || null,
       perte_pourcentage: editForm.perte_pourcentage,
+      date_incident: editForm.date_incident,
     }).eq('id', evt.incidentId)
     if (editForm.perte_pourcentage === 100) {
       // Trouver le culture_id via l'incident
@@ -462,6 +480,17 @@ export default function Agenda({ profile, session, cultures, legumesRef, onCultu
                               >{t.emoji} {t.label}</span>
                             ))}
                           </div>
+                          <input
+                            type="date"
+                            value={editForm.date_incident}
+                            onChange={e => setEditForm(prev => ({ ...prev, date_incident: e.target.value }))}
+                            style={{
+                              width: '100%', padding: '10px 12px', background: 'rgba(255,255,255,0.07)',
+                              border: '1px solid rgba(109,191,109,0.3)', borderRadius: 10,
+                              color: '#e8f5e8', fontSize: 14, fontFamily: 'Amaranth, sans-serif',
+                              outline: 'none', boxSizing: 'border-box', marginBottom: 10,
+                            }}
+                          />
                           <input
                             type="text"
                             placeholder="Précise si besoin..."

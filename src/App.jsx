@@ -98,7 +98,7 @@ export default function App() {
       (c.statut === 'a_semer' || c.statut === 'a_planter') &&
       c.date_semis && c.date_semis !== '1970-01-01' &&
       c.itineraire &&
-      new Date(c.date_semis) <= now
+      new Date(c.date_semis) < now
     )
   }, [cultures])
 
@@ -130,27 +130,27 @@ export default function App() {
         updates.date_recolte_prevue = toLocalDateStr(dateRec)
       }
     }
+    if (suivant === 'recolte') {
+      updates.date_recolte_debut = dateChoisie
+    }
+    if (suivant === 'termine') {
+      updates.date_fin = dateChoisie
+    }
     await supabase.from('cultures').update(updates).eq('id', c.id)
 
-    // Recalculer les dates des semis suivants du même groupe
+    // Recalculer les dates des semis/plants suivants du même groupe
     if (c.groupe_id && c.numero_semis === 1 && c.total_semis > 1) {
       const freres = cultures
         .filter(x => x.groupe_id === c.groupe_id && x.numero_semis > 1)
         .sort((a, b) => a.numero_semis - b.numero_semis)
       if (freres.length > 0) {
-        // Déduire l'intervalle en jours depuis l'écart existant entre semis 1 et 2
-        const semis2 = freres[0]
+        const intervalleJours = (c.intervalle_semis_semaines || 2) * 7
         const parseLocal = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
-        const ancienneDate1 = parseLocal(c.date_semis)
-        const ancienneDate2 = parseLocal(semis2.date_semis)
-        const intervalleJours = Math.round((ancienneDate2 - ancienneDate1) / (1000 * 60 * 60 * 24))
-        if (intervalleJours > 0) {
-          const dateBase = parseLocal(dateChoisie)
-          for (const frere of freres) {
-            const nouvDate = new Date(dateBase)
-            nouvDate.setDate(nouvDate.getDate() + (frere.numero_semis - 1) * intervalleJours)
-            await supabase.from('cultures').update({ date_semis: toLocalDateStr(nouvDate) }).eq('id', frere.id)
-          }
+        const dateBase = parseLocal(dateChoisie)
+        for (const frere of freres) {
+          const nouvDate = new Date(dateBase)
+          nouvDate.setDate(nouvDate.getDate() + (frere.numero_semis - 1) * intervalleJours)
+          await supabase.from('cultures').update({ date_semis: toLocalDateStr(nouvDate) }).eq('id', frere.id)
         }
       }
     }
@@ -350,7 +350,7 @@ if (isNewUser) return (
               ) : (
                 <>
                   <div style={{ color: '#e8f5e8', fontSize: 13, marginBottom: 10, lineHeight: 1.5 }}>
-                    Tu avais prévu de semer ta culture de <strong style={{ color: '#6dbf6d' }}>{c.legume}</strong> le <strong style={{ color: '#f0a500' }}>{datePrevue}</strong>, c'est fait ?
+                    Tu avais prévu {c.itineraire === 'D' ? 'de planter' : 'de semer'} ta culture {/^[aeiouyâéèêëîôû]/i.test(c.legume) ? "d'" : 'de '}<strong style={{ color: '#6dbf6d' }}>{c.legume}</strong> le <strong style={{ color: '#f0a500' }}>{datePrevue}</strong>, c'est fait ?
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button

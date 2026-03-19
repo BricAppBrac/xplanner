@@ -1,5 +1,5 @@
 // const TEST_DATE = null; // Mettre une date ici pour tester, ex: new Date('2026-05-01')
-const TEST_DATE = new Date("2025-12-15"); // Mettre une date ici pour tester, ex: new Date('2026-05-01')
+const TEST_DATE = new Date("2026-06-30"); // Mettre une date ici pour tester, ex: new Date('2026-05-01')
 
 export function getNow() {
   return TEST_DATE ? new Date(TEST_DATE) : new Date();

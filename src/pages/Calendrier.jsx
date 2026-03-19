@@ -5,7 +5,7 @@ import { getNow } from '../lib/dateTest'
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
 const TYPES = [
-  { key: 'semis_abri',  prefixe: 'semis_abri',  label: 'Semis abri',        bg: 'rgba(109,191,109,0.5)',  border: '#6dbf6d' },
+  { key: 'semis_abri',  prefixe: 'semis_abri',  label: 'Semis abri',        bg: 'rgba(60,130,60,0.7)',    border: '#3c823c' },
   { key: 'semis_terre', prefixe: 'semis_terre',  label: 'Semis pleine terre', bg: 'rgba(109,191,109,0.85)', border: '#4a9a4a' },
   { key: 'plantation',  prefixe: 'plantation',   label: 'Plantation',         bg: '#FEFE8E',                border: '#d4d46a' },
   { key: 'recolte',     prefixe: 'recolte',      label: 'Récolte',            bg: 'rgba(180,50,50,0.7)',    border: '#c45555', labelColor: '#e88888' },

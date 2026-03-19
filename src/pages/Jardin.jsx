@@ -208,7 +208,11 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
   const [incidentSaving, setIncidentSaving] = useState(false)
   const [recolteFinId, setRecolteFinId] = useState(null) // culture.id pour confirmation récolte terminée
   const [recolteFinNote, setRecolteFinNote] = useState('')
+  const [recolteFinDate, setRecolteFinDate] = useState('')
   const [recolteFinSaving, setRecolteFinSaving] = useState(false)
+  const [editNoteId, setEditNoteId] = useState(null)
+  const [editNoteText, setEditNoteText] = useState('')
+  const [deleteNoteId, setDeleteNoteId] = useState(null)
   const [onboardingSeen, setOnboardingSeen] = useState(() => localStorage.getItem('onboarding_seen') === 'true')
   const [incidents, setIncidents] = useState([])
 
@@ -291,7 +295,30 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
         updates.date_recolte_prevue = toLocalDateStr(dateRec)
       }
     }
+    if (suivant === 'recolte') {
+      updates.date_recolte_debut = dateChoisie
+    }
+    if (suivant === 'termine') {
+      updates.date_fin = dateChoisie
+    }
     await supabase.from('cultures').update(updates).eq('id', culture.id)
+
+    // Pour les semis/plants échelonnés : recalculer les dates des suivants
+    if (culture.groupe_id && (culture.numero_semis || 1) === 1 && (culture.total_semis || 1) > 1) {
+      const freres = cultures
+        .filter(x => x.groupe_id === culture.groupe_id && (x.numero_semis || 1) > 1)
+        .sort((a, b) => a.numero_semis - b.numero_semis)
+      if (freres.length > 0) {
+        const intervalleJours = (culture.intervalle_semis_semaines || 2) * 7
+        const [yb, mb, db] = dateChoisie.split('-').map(Number)
+        const dateBase = new Date(yb, mb - 1, db)
+        for (const frere of freres) {
+          const nouvDate = new Date(dateBase)
+          nouvDate.setDate(nouvDate.getDate() + (frere.numero_semis - 1) * intervalleJours)
+          await supabase.from('cultures').update({ date_semis: toLocalDateStr(nouvDate) }).eq('id', frere.id)
+        }
+      }
+    }
     if (onCultureChanged) onCultureChanged()
     else setCulturesLocal(prev => prev.map(c => c.id === culture.id ? { ...c, ...updates } : c))
     setConfirmId(null)
@@ -310,7 +337,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
 
   const ouvrirIncident = (cultureId) => {
     setIncidentId(cultureId)
-    setIncidentForm({ type: null, note: '', perte_pourcentage: 0 })
+    setIncidentForm({ type: null, note: '', perte_pourcentage: 0, date_incident: toLocalDateStr(getNow()) })
     setConfirmId(null)
     setChoixItId(null)
     setRecolteFinId(null)
@@ -325,6 +352,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
       type: incidentForm.type,
       note: incidentForm.note || null,
       perte_pourcentage: incidentForm.perte_pourcentage,
+      date_incident: incidentForm.date_incident,
     })
     if (incidentForm.perte_pourcentage === 100) {
       await supabase.from('cultures').update({ statut: 'termine' }).eq('id', culture.id)
@@ -338,6 +366,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
 
   const ouvrirRecolteFin = (cultureId) => {
     setRecolteFinId(cultureId)
+    setRecolteFinDate(toLocalDateStr(getNow()))
     setRecolteFinNote('')
     setConfirmId(null)
     setChoixItId(null)
@@ -346,13 +375,14 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
 
   const confirmerRecolteFin = async (culture) => {
     setRecolteFinSaving(true)
-    await supabase.from('cultures').update({ statut: 'termine' }).eq('id', culture.id)
+    await supabase.from('cultures').update({ statut: 'termine', date_fin: recolteFinDate }).eq('id', culture.id)
     await supabase.from('incidents').insert({
       culture_id: culture.id,
       user_id: session.user.id,
       type: 'recolte_terminee',
       note: recolteFinNote || null,
       perte_pourcentage: 0,
+      date_incident: recolteFinDate,
     })
     setRecolteFinSaving(false)
     setRecolteFinId(null)
@@ -371,34 +401,17 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
     const groupeId = nbSemis > 1 ? crypto.randomUUID() : null
     const intervalle = form.intervalle_semis_semaines || 2
 
-    // Calculer la date de base : saisie utilisateur ou auto depuis legumes_ref
-    let dateSemisBase = form.date_semis ? new Date(form.date_semis) : null
-    if (!dateSemisBase && form.legume_ref_id) {
-      const refLeg = legumesRef.find(l => l.id === form.legume_ref_id)
-      if (refLeg) {
-        const zone = getZone(profile)
-        const now = getNow()
-        now.setHours(0, 0, 0, 0)
-        const year = now.getFullYear()
-        // Chercher la première fenêtre de semis ouverte
-        for (const prefixe of ['semis_abri', 'semis_terre']) {
-          const debut = refLeg[`${prefixe}_${zone}_debut`]
-          if (debut) {
-            const [mm, dd] = debut.split('-').map(Number)
-            const d = new Date(year, mm - 1, dd)
-            dateSemisBase = d > now ? d : now
-            break
-          }
-        }
-        if (!dateSemisBase) dateSemisBase = now
-      }
-    }
+    // Date de semis : uniquement si saisie par l'utilisateur
+    const dateSemisBase = form.date_semis ? new Date(form.date_semis) : null
 
     let lastData = null
     let lastError = null
     for (let i = 0; i < nbSemis; i++) {
-      let dateSemisPrevue = new Date(dateSemisBase)
-      dateSemisPrevue.setDate(dateSemisPrevue.getDate() + i * intervalle * 7)
+      let dateSemisPrevue = null
+      if (dateSemisBase) {
+        dateSemisPrevue = new Date(dateSemisBase)
+        dateSemisPrevue.setDate(dateSemisPrevue.getDate() + i * intervalle * 7)
+      }
       const payload = {
         user_id: session.user.id,
         legume: form.legume,
@@ -407,9 +420,11 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
         statut: itConfig.statutInitial,
         itineraire: form.itineraire,
         date_semis: dateSemisPrevue ? toLocalDateStr(dateSemisPrevue) : null,
+        created_at: getNow().toISOString(),
         notes: form.notes || null,
         nb_semis: 1,
         groupe_id: groupeId,
+        intervalle_semis_semaines: nbSemis > 1 ? intervalle : null,
         numero_semis: i + 1,
         total_semis: nbSemis,
       }
@@ -495,9 +510,6 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
 
   const renderCarteActions = (c, estTermine, suivant) => (
     <>
-      {c.notes && (
-        <div style={{ color: '#7daa7d', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>{c.notes}</div>
-      )}
       {!estTermine && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
           <span
@@ -559,6 +571,10 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
               >{t.emoji} {t.label}</span>
             ))}
           </div>
+          <input type="date" value={incidentForm.date_incident}
+            onChange={e => setIncidentForm(prev => ({ ...prev, date_incident: e.target.value }))}
+            style={{ ...inputStyle, marginBottom: 10, fontSize: 14 }}
+          />
           <input type="text" placeholder="Précise si besoin..." value={incidentForm.note}
             onChange={e => setIncidentForm(prev => ({ ...prev, note: e.target.value }))}
             style={{ ...inputStyle, marginBottom: 10, fontSize: 14 }}
@@ -590,6 +606,11 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
           <div style={{ color: '#e8f5e8', fontSize: 14, marginBottom: 8 }}>
             🧺 Confirmer la fin de récolte de tes <strong style={{ color: '#873f5f' }}>{c.legume}</strong> ?
           </div>
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ color: '#a8d5a2', fontSize: 13, display: 'block', marginBottom: 4 }}>Date de fin</label>
+            <input type="date" value={recolteFinDate} onChange={e => setRecolteFinDate(e.target.value)}
+              style={{ ...inputStyle, fontSize: 14, padding: '6px 10px' }} />
+          </div>
           <input type="text" placeholder="Une dernière remarque ?" value={recolteFinNote} onChange={e => setRecolteFinNote(e.target.value)} style={{ ...inputStyle, marginBottom: 10, fontSize: 14 }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => confirmerRecolteFin(c)} disabled={recolteFinSaving}
@@ -606,10 +627,10 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
           <div style={{ color: '#e8f5e8', fontSize: 14, marginBottom: 8 }}>
             Passer à : <strong style={{ color: '#6dbf6d' }}>{LABELS_STATUTS[suivant]}</strong> ?
           </div>
-          {(STATUTS_SEMIS.includes(suivant) || suivant === 'plante') && (
+          {(STATUTS_SEMIS.includes(suivant) || suivant === 'plante' || suivant === 'recolte' || suivant === 'termine') && (
             <div style={{ marginBottom: 8 }}>
               <label style={{ color: '#a8d5a2', fontSize: 13, display: 'block', marginBottom: 4 }}>
-                {suivant === 'plante' ? 'Date de plantation' : 'Date de semis'}
+                {suivant === 'termine' ? 'Date de fin' : suivant === 'recolte' ? 'Date de début de récolte' : suivant === 'plante' ? 'Date de plantation' : 'Date de semis'}
               </label>
               <input type="date" value={confirmDate} onChange={e => setConfirmDate(e.target.value)}
                 style={{ ...inputStyle, fontSize: 14, padding: '6px 10px' }} />
@@ -646,6 +667,10 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
       }
       return { text: 'Prévu le', color: null }
     }
+    if ((c.statut === 'a_semer' || c.statut === 'a_planter') && (!c.date_semis || c.date_semis === '1970-01-01')) {
+      const dateCreation = c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : ''
+      return { text: `Saisi le : ${dateCreation}`, color: null, hideDate: true }
+    }
     const text = (() => {
       switch (c.statut) {
         case 'a_semer': case 'a_planter': return 'Saisi le'
@@ -656,6 +681,18 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
         default: return 'Date'
       }
     })()
+    // Pour "plante", utiliser date_plantation au lieu de date_semis
+    if (c.statut === 'plante' && c.date_plantation) {
+      return { text, color: null, dateOverride: c.date_plantation }
+    }
+    // Pour "recolte", utiliser date_recolte_debut
+    if (c.statut === 'recolte' && c.date_recolte_debut) {
+      return { text, color: null, dateOverride: c.date_recolte_debut }
+    }
+    // Pour "termine", utiliser date_fin
+    if (c.statut === 'termine' && c.date_fin) {
+      return { text, color: null, dateOverride: c.date_fin }
+    }
     return { text, color: null }
   }
 
@@ -773,7 +810,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
                             {renderBadge(c, st, estTermine, cliquable)}
                           </div>
                           <div style={{ color: '#a8d5a2', fontSize: 12 }}>
-                            {(() => { const ld = labelDate(c); if (ld.hideDate) return <span>{ld.text}</span>; const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
+                            {(() => { const ld = labelDate(c); if (ld.hideDate) return <span>{ld.text}</span>; const src = ld.dateOverride || c.date_semis; const dateStr = (!src || src === '1970-01-01') ? 'à planifier' : new Date(src).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
                           </div>
                           {renderCarteActions(c, estTermine, suivant)}
                         </div>
@@ -800,7 +837,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
                     {renderBadge(c, st, estTermine, cliquable)}
                 </div>
                 <div style={{ color: '#a8d5a2', fontSize: 12 }}>
-                  {(() => { const ld = labelDate(c); if (ld.hideDate) return <span>{ld.text}</span>; const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
+                  {(() => { const ld = labelDate(c); if (ld.hideDate) return <span>{ld.text}</span>; const src = ld.dateOverride || c.date_semis; const dateStr = (!src || src === '1970-01-01') ? 'à planifier' : new Date(src).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
                 </div>
                 {renderCarteActions(c, estTermine, suivant)}
               </div>
@@ -853,7 +890,112 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
             </div>
           )}
 
-          {/* 3. Associations possibles */}
+          {/* 3. Notes personnelles */}
+          {cultures.some(c => c.notes) && (
+            <div style={sectionStyle}>
+              <div style={sectionTitleStyle}>📝 Notes personnelles</div>
+              {cultures.filter(c => c.notes && (!c.groupe_id || (c.numero_semis || 1) === 1)).map(c => (
+                <div key={c.id} style={{ marginBottom: 10, color: '#e8f5e8', fontSize: 14, fontFamily: 'Amaranth, sans-serif' }}>
+                  {editNoteId === c.id ? (
+                    <div>
+                      <div style={{ marginBottom: 6 }}>
+                        {getEmoji(c.legume)} <strong>{c.legume}{c.variete ? ` – ${c.variete}` : ''}</strong>
+                      </div>
+                      <textarea
+                        value={editNoteText}
+                        onChange={e => setEditNoteText(e.target.value)}
+                        rows={2}
+                        style={{
+                          width: '100%', padding: '8px 10px', background: 'rgba(255,255,255,0.07)',
+                          border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8,
+                          color: '#e8f5e8', fontSize: 14, fontFamily: 'Amaranth, sans-serif',
+                          outline: 'none', boxSizing: 'border-box', resize: 'vertical',
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                        <button
+                          onClick={async () => {
+                            const ids = c.groupe_id
+                              ? cultures.filter(x => x.groupe_id === c.groupe_id).map(x => x.id)
+                              : [c.id]
+                            for (const id of ids) {
+                              await supabase.from('cultures').update({ notes: editNoteText || null }).eq('id', id)
+                            }
+                            setEditNoteId(null)
+                            if (onCultureChanged) onCultureChanged()
+                            else fetchCultures()
+                          }}
+                          style={{
+                            padding: '5px 12px', background: 'linear-gradient(135deg, #4a7c4a, #6dbf6d)',
+                            border: 'none', borderRadius: 8, color: '#fff', fontSize: 13,
+                            cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
+                          }}
+                        >Enregistrer</button>
+                        <button
+                          onClick={() => setEditNoteId(null)}
+                          style={{
+                            padding: '5px 12px', background: 'transparent',
+                            border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8,
+                            color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
+                          }}
+                        >Annuler</button>
+                      </div>
+                    </div>
+                  ) : deleteNoteId === c.id ? (
+                    <div>
+                      <div style={{ marginBottom: 6, color: '#f0a500' }}>
+                        Supprimer la note de {c.legume}{c.variete ? ` – ${c.variete}` : ''} ?
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={async () => {
+                            const ids = c.groupe_id
+                              ? cultures.filter(x => x.groupe_id === c.groupe_id).map(x => x.id)
+                              : [c.id]
+                            for (const id of ids) {
+                              await supabase.from('cultures').update({ notes: null }).eq('id', id)
+                            }
+                            setDeleteNoteId(null)
+                            if (onCultureChanged) onCultureChanged()
+                            else fetchCultures()
+                          }}
+                          style={{
+                            padding: '5px 12px', background: 'rgba(135,63,95,0.3)',
+                            border: '1px solid #873f5f', borderRadius: 8,
+                            color: '#e8f5e8', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
+                          }}
+                        >Confirmer</button>
+                        <button
+                          onClick={() => setDeleteNoteId(null)}
+                          style={{
+                            padding: '5px 12px', background: 'transparent',
+                            border: '1px solid rgba(109,191,109,0.3)', borderRadius: 8,
+                            color: '#a8d5a2', fontSize: 13, cursor: 'pointer', fontFamily: 'Amaranth, sans-serif',
+                          }}
+                        >Annuler</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ flex: 1 }}>
+                        {getEmoji(c.legume)} <strong>{c.legume}{c.variete ? ` – ${c.variete}` : ''}</strong> : {c.notes}
+                      </span>
+                      <span
+                        onClick={() => { setEditNoteId(c.id); setEditNoteText(c.notes); setDeleteNoteId(null) }}
+                        style={{ cursor: 'pointer', fontSize: 14, flexShrink: 0 }}
+                      >✏️</span>
+                      <span
+                        onClick={() => { setDeleteNoteId(c.id); setEditNoteId(null) }}
+                        style={{ cursor: 'pointer', fontSize: 14, flexShrink: 0 }}
+                      >🗑️</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 4. Associations possibles */}
           {conseils.associations?.length > 0 && (
             <div style={sectionStyle}>
               <div style={sectionTitleStyle}>Associations possibles</div>

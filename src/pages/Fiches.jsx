@@ -73,6 +73,7 @@ function FicheDetail({ legume, zone, onBack }) {
   const valueStyle = { color: '#e8f5e8', fontSize: 15 }
   const itemStyle = { display: 'flex', alignItems: 'baseline', gap: 8, padding: '2px 0 2px 12px' }
 
+  const fmtDate = (mmdd) => mmdd ? mmdd.split('-').reverse().join('/') : null
   const semisAbri = { debut: legume[`semis_abri_${zone}_debut`], fin: legume[`semis_abri_${zone}_fin`] }
   const semisTerre = { debut: legume[`semis_terre_${zone}_debut`], fin: legume[`semis_terre_${zone}_fin`] }
   const plantation = { debut: legume[`plantation_${zone}_debut`], fin: legume[`plantation_${zone}_fin`] }
@@ -123,25 +124,25 @@ function FicheDetail({ legume, zone, onBack }) {
           {semisAbri.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Semis sous abri</div>
-              <div style={valueStyle}>du {semisAbri.debut} au {semisAbri.fin}</div>
+              <div style={valueStyle}>du {fmtDate(semisAbri.debut)} au {fmtDate(semisAbri.fin)}</div>
             </div>
           )}
           {semisTerre.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Semis pleine terre</div>
-              <div style={valueStyle}>du {semisTerre.debut} au {semisTerre.fin}</div>
+              <div style={valueStyle}>du {fmtDate(semisTerre.debut)} au {fmtDate(semisTerre.fin)}</div>
             </div>
           )}
           {plantation.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Plantation</div>
-              <div style={valueStyle}>du {plantation.debut} au {plantation.fin}</div>
+              <div style={valueStyle}>du {fmtDate(plantation.debut)} au {fmtDate(plantation.fin)}</div>
             </div>
           )}
           {recolte.debut && (
             <div style={{ marginBottom: 6 }}>
               <div style={labelStyle}>Récolte</div>
-              <div style={valueStyle}>du {recolte.debut} au {recolte.fin}</div>
+              <div style={valueStyle}>du {fmtDate(recolte.debut)} au {fmtDate(recolte.fin)}</div>
             </div>
           )}
         </div>
