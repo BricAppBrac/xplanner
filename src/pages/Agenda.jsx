@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { calculerCalendrier, chargerIncidents, INCIDENT_COLORS, INCIDENT_EMOJIS, INCIDENT_LABELS } from '../lib/calendrier'
+import { getNow } from '../lib/dateTest'
 
 const EMOJI_MAP = {
   tomate: '🍅', courgette: '🥒', concombre: '🥒',
@@ -55,7 +56,17 @@ function formatDateOrdinal(date) {
   return ordinal + ' ' + mois
 }
 
-function BadgeStatut({ statut }) {
+function getLabelDate(evt) {
+  const now = getNow(); now.setHours(0, 0, 0, 0)
+  const d = new Date(evt.date); d.setHours(0, 0, 0, 0)
+  if (d > now) return 'Prévu le'
+  if (evt.type === 'semis') return (evt.statutCulture === 'a_semer' || evt.statutCulture === 'a_planter') ? 'Saisi le' : 'Semé le'
+  if (evt.type === 'plantation') return (evt.statutCulture === 'a_planter') ? 'Saisi le' : 'Planté le'
+  if (evt.type === 'recolte') return 'Récolté le'
+  return null
+}
+
+function BadgeStatut({ statut, type }) {
   if (statut === 'fait') {
     return (
       <span style={{
@@ -100,6 +111,17 @@ function BadgeStatut({ statut }) {
         animation: 'pulse 1.5s infinite',
       }}>
         Cette semaine
+      </span>
+    )
+  }
+  if (statut === 'a_venir' && (type === 'semis' || type === 'plantation')) {
+    return (
+      <span style={{
+        background: 'rgba(168,213,162,0.15)', color: '#a8d5a2',
+        fontSize: 13, fontWeight: 'bold',
+        padding: '2px 8px', borderRadius: 10,
+      }}>
+        À venir
       </span>
     )
   }
@@ -341,6 +363,7 @@ export default function Agenda({ profile, session, cultures, legumesRef, onCultu
               {evts.map((evt, i) => {
                 const dateStr = formatDateOrdinal(evt.date)
                 const isIncident = evt.type === 'incident'
+                const labelDate = !isIncident ? getLabelDate(evt) : null
                 const estFait = evt.statut === 'fait'
                 const evtKey = isIncident
                   ? `incident-${evt.incidentType}-${i}`
@@ -535,8 +558,8 @@ export default function Agenda({ profile, session, cultures, legumesRef, onCultu
                     opacity: cultureTerminee ? 0.7 : 1,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ color: '#a8d5a2', fontSize: 13, flexShrink: 0, width: 52 }}>
-                        {dateStr}
+                      <span style={{ color: '#a8d5a2', fontSize: 13, flexShrink: 0 }}>
+                        {labelDate ? `${labelDate} ` : ''}{dateStr}
                       </span>
                       <span style={{ fontSize: 20, flexShrink: 0 }}>{getEmoji(evt.legume)}</span>
                       <span style={{ color: '#e8f5e8', fontSize: 15, fontWeight: 'bold' }}>
@@ -546,7 +569,7 @@ export default function Agenda({ profile, session, cultures, legumesRef, onCultu
                         {evt.label}
                       </span>
                       <span style={{ flexShrink: 0, marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <BadgeStatut statut={evt.statut} />
+                        <BadgeStatut statut={evt.statut} type={evt.type} />
                         {estFait && statutPrec && (
                           <span
                             onClick={() => setRevertId(showRevert ? null : evtKey)}

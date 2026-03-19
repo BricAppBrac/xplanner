@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { getZone } from '../lib/conseils'
+import { getNow } from '../lib/dateTest'
 import { slugToLabel } from '../lib/utils'
 import LegumeSearch from '../components/ui/LegumeSearch'
 
@@ -33,7 +34,7 @@ function isInFenetre(debut, fin, mmdd) {
 }
 
 function getMMDD() {
-  const now = new Date()
+  const now = getNow()
   const mm = String(now.getMonth() + 1).padStart(2, '0')
   const dd = String(now.getDate()).padStart(2, '0')
   return `${mm}-${dd}`

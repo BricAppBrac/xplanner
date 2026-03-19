@@ -1,3 +1,5 @@
+import { getNow } from './dateTest'
+
 function getZoneClimatique(ville) {
   const villesNord = ['lille', 'paris', 'rouen', 'amiens', 'reims', 'metz', 'strasbourg', 'nancy', 'rennes', 'caen', 'brest', 'le havre', 'dijon', 'besançon', 'orléans', 'tours', 'le mans', 'angers', 'nantes'];
   const villesSud = ['marseille', 'nice', 'toulon', 'montpellier', 'perpignan', 'nîmes', 'avignon', 'aix-en-provence', 'ajaccio', 'bastia', 'béziers', 'carcassonne', 'pau', 'bayonne', 'biarritz'];
@@ -64,7 +66,7 @@ ${zone.charAt(0).toUpperCase() + zone.slice(1)} de la France
 ${culturesTexte}
 
 ## DATE DU JOUR
-${new Date().toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+${getNow().toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 
 ## CONSEILS DU JOUR (calculés automatiquement)
 

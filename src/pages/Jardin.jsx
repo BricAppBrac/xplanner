@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { getConseilsJour, getZone } from '../lib/conseils'
+import { getNow, toLocalDateStr } from '../lib/dateTest'
 import LegumeSearch from '../components/ui/LegumeSearch'
 
 const EMOJI_MAP = {
@@ -246,6 +247,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
     [profile, cultures, legumesRef]
   )
 
+
   const ouvrir = () => { setForm(formVide); setModalOuverte(true) }
   const fermer = () => { setModalOuverte(false) }
   const handleChange = (champ, valeur) => { setForm(prev => ({ ...prev, [champ]: valeur })) }
@@ -268,20 +270,26 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
     const suivant = getStatutSuivant(culture)
     if (!suivant) return
     setConfirmId(culture.id)
-    setConfirmDate(new Date().toISOString().split('T')[0])
+    setConfirmDate(toLocalDateStr(getNow()))
     setChoixItId(null)
   }
 
   const confirmerProgression = async (culture) => {
     const suivant = getStatutSuivant(culture)
     if (!suivant) return
-    const dateChoisie = confirmDate || new Date().toISOString().split('T')[0]
+    const dateChoisie = confirmDate || toLocalDateStr(getNow())
     const updates = { statut: suivant }
     if (STATUTS_SEMIS.includes(suivant)) {
       updates.date_semis = dateChoisie
     }
     if (suivant === 'plante') {
       updates.date_plantation = dateChoisie
+      const ref = legumesRef.find(l => l.id === culture.legume_ref_id)
+      if (ref?.duree_avant_recolte_jours) {
+        const [y, m, d] = dateChoisie.split('-').map(Number)
+        const dateRec = new Date(y, m - 1, d + ref.duree_avant_recolte_jours)
+        updates.date_recolte_prevue = toLocalDateStr(dateRec)
+      }
     }
     await supabase.from('cultures').update(updates).eq('id', culture.id)
     if (onCultureChanged) onCultureChanged()
@@ -369,7 +377,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
       const refLeg = legumesRef.find(l => l.id === form.legume_ref_id)
       if (refLeg) {
         const zone = getZone(profile)
-        const now = new Date()
+        const now = getNow()
         now.setHours(0, 0, 0, 0)
         const year = now.getFullYear()
         // Chercher la première fenêtre de semis ouverte
@@ -398,7 +406,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
         variete: form.variete || null,
         statut: itConfig.statutInitial,
         itineraire: form.itineraire,
-        date_semis: dateSemisPrevue ? dateSemisPrevue.toISOString().split('T')[0] : null,
+        date_semis: dateSemisPrevue ? toLocalDateStr(dateSemisPrevue) : null,
         notes: form.notes || null,
         nb_semis: 1,
         groupe_id: groupeId,
@@ -631,14 +639,16 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
   )
 
   const labelDate = (c) => {
-    if ((c.statut === 'a_semer' || c.statut === 'a_planter') && c.date_semis && c.date_semis !== '1970-01-01') {
-      const d = new Date(c.date_semis)
-      const now = new Date(); now.setHours(0, 0, 0, 0)
-      if (d < now) return { text: '⚠️ Statut à mettre à jour', color: '#f0a500' }
+    if ((c.statut === 'a_semer' || c.statut === 'a_planter') && c.numero_semis > 1 && c.groupe_id) {
+      const premier = cultures.find(x => x.groupe_id === c.groupe_id && x.numero_semis === 1)
+      if (premier && (premier.statut === 'a_semer' || premier.statut === 'a_planter')) {
+        return { text: 'Calcul en attente', color: null, hideDate: true }
+      }
+      return { text: 'Prévu le', color: null }
     }
     const text = (() => {
       switch (c.statut) {
-        case 'a_semer': case 'a_planter': return 'Prévu le'
+        case 'a_semer': case 'a_planter': return 'Saisi le'
         case 'seme_abri_plateau': case 'seme_abri_godet': case 'seme_place': return 'Semé le'
         case 'plante': return 'Planté le'
         case 'recolte': return 'En récolte depuis le'
@@ -742,7 +752,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
                       fontSize: 18, fontWeight: 'bold', color: '#e8f5e8',
                       fontFamily: 'Amaranth, sans-serif', marginBottom: 8,
                     }}>
-                      {getEmoji(premier.legume)} {premier.legume}{premier.variete ? ` – ${premier.variete}` : ''} — {premier.total_semis || g.membres.length} semis échelonnés
+                      {getEmoji(premier.legume)} {premier.legume}{premier.variete ? ` – ${premier.variete}` : ''} — {premier.total_semis || g.membres.length} {premier.itineraire === 'D' ? 'plants échelonnés' : 'semis échelonnés'}
                     </div>
                     {g.membres.map((c, idx) => {
                       const st = statutInfo(c.statut)
@@ -758,12 +768,12 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                             <span style={{ color: '#a8d5a2', fontSize: 15, fontWeight: 'bold' }}>
-                              Semis {c.numero_semis || (idx + 1)}/{c.total_semis || g.membres.length}
+                              {c.itineraire === 'D' ? 'Plant' : 'Semis'} {c.numero_semis || (idx + 1)}/{c.total_semis || g.membres.length}
                             </span>
                             {renderBadge(c, st, estTermine, cliquable)}
                           </div>
                           <div style={{ color: '#a8d5a2', fontSize: 12 }}>
-                            {(() => { const ld = labelDate(c); const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
+                            {(() => { const ld = labelDate(c); if (ld.hideDate) return <span>{ld.text}</span>; const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
                           </div>
                           {renderCarteActions(c, estTermine, suivant)}
                         </div>
@@ -790,7 +800,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
                     {renderBadge(c, st, estTermine, cliquable)}
                 </div>
                 <div style={{ color: '#a8d5a2', fontSize: 12 }}>
-                  {(() => { const ld = labelDate(c); const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
+                  {(() => { const ld = labelDate(c); if (ld.hideDate) return <span>{ld.text}</span>; const dateStr = (!c.date_semis || c.date_semis === '1970-01-01') ? 'à planifier' : new Date(c.date_semis).toLocaleDateString('fr-FR'); return <span style={ld.color ? { color: ld.color } : undefined}>{ld.text} : {dateStr}</span> })()}
                 </div>
                 {renderCarteActions(c, estTermine, suivant)}
               </div>
@@ -1025,6 +1035,7 @@ export default function Jardin({ profile, session, cultures: culturesProp, legum
           </form>
         </div>
       )}
+
     </div>
   )
 }

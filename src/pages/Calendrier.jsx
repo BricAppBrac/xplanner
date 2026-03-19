@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { getZone } from '../lib/conseils'
+import { getNow } from '../lib/dateTest'
 
 const MOIS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 
@@ -44,7 +45,7 @@ function calculerGrille(legumesRef, zone) {
 
 export default function Calendrier({ profile, legumesRef }) {
   const zone = getZone(profile)
-  const moisActuel = new Date().getMonth()
+  const moisActuel = getNow().getMonth()
 
   const groupes = useMemo(
     () => calculerGrille(legumesRef || [], zone),

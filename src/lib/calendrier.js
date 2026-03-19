@@ -1,4 +1,5 @@
 import { getZone } from './conseils'
+import { getNow, toLocalDateStr } from './dateTest'
 import { supabase } from './supabase'
 
 const INCIDENT_COLORS = {
@@ -110,7 +111,7 @@ function getProjectedSemisDate(culture, allCultures, ref, zone, year) {
     }
   }
 
-  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const now = getNow(); now.setHours(0, 0, 0, 0);
   const abriDebut = ref?.[`semis_abri_${zone}_debut`];
   if (abriDebut) {
     const refDate = mmddToDate(abriDebut, year);
@@ -121,7 +122,7 @@ function getProjectedSemisDate(culture, allCultures, ref, zone, year) {
 
 export function calculerCalendrier(profile, cultures, legumesRef) {
   const zone = getZone(profile);
-  const now = new Date();
+  const now = getNow();
   now.setHours(0, 0, 0, 0);
   const year = now.getFullYear();
   const evenements = [];
@@ -137,12 +138,17 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
     const dateSemisRef = getDateSemisRef(culture);
     const totalSemis = culture.total_semis || 1;
     const numSemis = culture.numero_semis || 1;
-    const semisTag = totalSemis > 1 ? ` ${numSemis}/${totalSemis}` : '';
+    const semisTag = totalSemis > 1 ? ` ${itineraire === 'D' ? 'Plant' : 'Semis'} ${numSemis}/${totalSemis}` : '';
 
     const semisFait = SEMIS_FAITS.includes(statutCulture);
     const godetFait = GODET_FAIT.includes(statutCulture);
     const plantationFaite = PLANTATION_FAITE.includes(statutCulture);
     const recolteFaite = RECOLTE_FAITE.includes(statutCulture);
+
+    // ── Semis échelonnés 2/N+ en a_semer/a_planter sans date : pas d'événement ──
+    if (totalSemis > 1 && numSemis > 1 && (statutCulture === 'a_semer' || statutCulture === 'a_planter') && (!culture.date_semis || culture.date_semis === '1970-01-01')) {
+      continue;
+    }
 
     // ── SEMIS (1 culture = 1 événement semis) ──
     if (itineraire === 'A') {
@@ -153,7 +159,7 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
         evenements.push({
           date: new Date(baseA),
           legume: nom, variete, slug: ref.slug,
-          cultureId: culture.id, itineraire,
+          cultureId: culture.id, itineraire, statutCulture, numSemis,
           type: 'semis', label: `🌱 Semis en plateau sous abri${semisTag}`,
           statut: badgeEvt(new Date(baseA), now, semisFait),
         });
@@ -163,7 +169,7 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
         evenements.push({
           date: dateGodet,
           legume: nom, variete, slug: ref.slug,
-          cultureId: culture.id, itineraire,
+          cultureId: culture.id, itineraire, statutCulture, numSemis,
           type: 'semis', label: `🪴 Repiquage en godets${semisTag}`,
           statut: badgeEvt(dateGodet, now, godetFait),
         });
@@ -187,32 +193,85 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
         evenements.push({
           date: base,
           legume: nom, variete, slug: ref.slug,
-          cultureId: culture.id, itineraire,
+          cultureId: culture.id, itineraire, statutCulture, numSemis,
           type: 'semis', label,
           statut: semisFait ? 'fait' : badgeEvt(base, now, false),
         });
       }
     }
-    // Itinéraire D : pas de semis
+    // Itinéraire D : pas de semis, mais générer un événement plantation si date renseignée
+    if (itineraire === 'D' && statutCulture === 'a_planter' && culture.date_semis && culture.date_semis !== '1970-01-01') {
+      // Masquer plant 2/N+ tant que plant 1/N n'est pas confirmé
+      if (totalSemis > 1 && numSemis > 1) {
+        const premier = (cultures || []).find(c => c.groupe_id === culture.groupe_id && (c.numero_semis || 1) === 1);
+        if (premier && premier.statut === 'a_planter') continue;
+      }
+      const [yp, mp, dp] = culture.date_semis.split('-').map(Number);
+      const datePlant = new Date(yp, mp - 1, dp);
+      evenements.push({
+        date: datePlant,
+        legume: nom, variete, slug: ref.slug,
+        cultureId: culture.id, itineraire, statutCulture, numSemis,
+        type: 'plantation', label: `🪴 Plantation${semisTag}`,
+        statut: badgeEvt(datePlant, now, false),
+      });
+    }
 
     // ── PLANTATION & RÉCOLTE (1 par culture) ──
+    // Pas de plantation/récolte tant que le semis n'est pas confirmé
+    if (statutCulture === 'a_semer' || statutCulture === 'a_planter') continue;
+    if (!culture.date_semis || culture.date_semis === '1970-01-01') continue;
+
     const plantDebut = ref[`plantation_${zone}_debut`];
     const recDebut = ref[`recolte_${zone}_debut`];
+    const dureeAvantPlantation = ref.duree_avant_plantation_jours;
+    const dureeAvantRecolte = ref.duree_avant_recolte_jours;
 
-    const basePlant = (plantationFaite && culture.date_plantation) ? new Date(culture.date_plantation) : (plantDebut ? mmddToDate(plantDebut, year) : null);
-    const baseRec = recDebut ? mmddToDate(recDebut, year) : null;
+    // Parser date_semis en local
+    const [ys, ms, ds] = culture.date_semis.split('-').map(Number);
+    const dateSemisLocal = new Date(ys, ms - 1, ds);
+
+    // Date de plantation
+    let basePlant;
+    if (plantationFaite && culture.date_plantation) {
+      basePlant = new Date(culture.date_plantation);
+    } else {
+      const plantRef = plantDebut ? mmddToDate(plantDebut, year) : null;
+      const plantCalc = dureeAvantPlantation != null ? new Date(dateSemisLocal.getFullYear(), dateSemisLocal.getMonth(), dateSemisLocal.getDate() + dureeAvantPlantation) : null;
+      if (plantRef && plantCalc) {
+        basePlant = plantRef > plantCalc ? plantRef : plantCalc;
+      } else {
+        basePlant = plantCalc || plantRef || null;
+      }
+    }
+
+    // Date de récolte : priorité à date_recolte_prevue si renseignée
+    let baseRec;
+    if (culture.date_recolte_prevue && culture.date_recolte_prevue !== '1970-01-01') {
+      const [yr, mr, dr] = culture.date_recolte_prevue.split('-').map(Number);
+      baseRec = new Date(yr, mr - 1, dr);
+    } else {
+      const recRef = recDebut ? mmddToDate(recDebut, year) : null;
+      const datePlantEff = basePlant || dateSemisLocal;
+      const recCalc = dureeAvantRecolte != null ? new Date(datePlantEff.getFullYear(), datePlantEff.getMonth(), datePlantEff.getDate() + dureeAvantRecolte) : null;
+      if (recRef && recCalc) {
+        baseRec = recRef > recCalc ? recRef : recCalc;
+      } else {
+        baseRec = recCalc || recRef || null;
+      }
+    }
 
     if (basePlant) {
       evenements.push({
         date: new Date(basePlant),
         legume: nom, variete, slug: ref.slug,
-        cultureId: culture.id, itineraire,
+        cultureId: culture.id, itineraire, numSemis,
         type: 'plantation', label: `🪴 Plantation${semisTag}`,
         statut: plantationFaite ? 'fait' : badgeEvt(new Date(basePlant), now, false),
       });
     }
 
-    if (baseRec) {
+    if (baseRec && (plantationFaite || !basePlant)) {
       let evtStatut;
       if (statutCulture === 'recolte') evtStatut = 'en_cours';
       else if (recolteFaite) evtStatut = 'fait';
@@ -220,7 +279,7 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
       evenements.push({
         date: new Date(baseRec),
         legume: nom, variete, slug: ref.slug,
-        cultureId: culture.id, itineraire,
+        cultureId: culture.id, itineraire, numSemis,
         type: 'recolte', label: `🧺 Début de récolte${semisTag}`,
         statut: evtStatut,
       });
@@ -229,7 +288,7 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
 
   // Générer un evtId unique pour chaque événement
   for (const evt of evenements) {
-    const dateStr = evt.date.toISOString().split('T')[0];
+    const dateStr = toLocalDateStr(evt.date);
     evt.evtId = makeEvtId(evt.cultureId, evt.type, evt.label, dateStr);
   }
 
@@ -246,7 +305,7 @@ export function calculerCalendrier(profile, cultures, legumesRef) {
     ? evenements.filter(evt => !masques.has(evt.evtId))
     : evenements;
 
-  filtres.sort((a, b) => a.date - b.date);
+  filtres.sort((a, b) => a.date - b.date || (a.numSemis || 1) - (b.numSemis || 1));
 
   const parMois = {};
   for (const evt of filtres) {

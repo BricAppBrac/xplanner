@@ -1,3 +1,5 @@
+import { getNow } from './dateTest'
+
 export function getZone(profile) {
   const villesNord = ['lille', 'paris', 'rouen', 'amiens', 'reims', 'metz', 'strasbourg', 'nancy', 'rennes', 'caen', 'brest', 'le havre', 'dijon', 'besançon', 'orléans', 'tours', 'le mans', 'angers', 'nantes'];
   const villesSud = ['marseille', 'nice', 'toulon', 'montpellier', 'perpignan', 'nîmes', 'avignon', 'aix-en-provence', 'ajaccio', 'bastia', 'béziers', 'carcassonne', 'pau', 'bayonne', 'biarritz'];
@@ -24,7 +26,7 @@ function isInFenetre(fenetre, mmdd) {
 }
 
 function getMMDD() {
-  const now = new Date();
+  const now = getNow();
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
   return `${mm}-${dd}`;
@@ -97,7 +99,7 @@ export function getConseilsJour(profile, cultures, legumesRef) {
   }
 
   // 3. Récoltes prochaines
-  const now = new Date();
+  const now = getNow();
   now.setHours(0, 0, 0, 0);
   for (const culture of cultures || []) {
     if (culture.statut !== 'plante' && culture.statut !== 'en_place') continue;
